@@ -1,6 +1,19 @@
 # Cluster
 
+## Rebuild everything
+
+```bash
+./cluster/bootstrap.sh
+```
+
+Creates the kind cluster, installs Cilium (with Hubble Relay), metrics-server and Envoy
+Gateway, builds and loads the `shop-api` image, creates the namespace and the database
+password, installs the `shop` chart, and checks `/api/products` through the gateway.
+Safe to re-run. The sections below explain each step by hand.
+
 ## Pinned versions
+
+When you change a version here, change it in `bootstrap.sh` too.
 
 | Component        | Version  | Notes                                             |
 |------------------|----------|---------------------------------------------------|

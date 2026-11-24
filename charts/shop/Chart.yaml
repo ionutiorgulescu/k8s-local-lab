@@ -3,6 +3,6 @@ name: shop
 description: The shop API and its Postgres database, with probes, autoscaling, network policies and RBAC.
 type: application
 # Chart version: bump on ANY change to the chart (templates or default values).
-version: 0.1.0
+version: 0.1.1
 # App version: the shop-api release this chart deploys by default (used as the image tag).
 appVersion: "0.1.0"

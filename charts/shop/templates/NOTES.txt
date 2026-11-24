@@ -1,4 +1,4 @@
-shop {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+shop {{ .Chart.AppVersion }} {{ if .Release.IsUpgrade }}upgraded{{ else }}installed{{ end }} as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 Check the rollout:
   kubectl -n {{ .Release.Namespace }} rollout status deploy/api
