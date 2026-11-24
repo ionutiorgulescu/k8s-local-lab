@@ -1,0 +1,7 @@
+# Keep the build context small and avoid copying local builds into the image.
+node_modules
+dist
+npm-debug.log
+Dockerfile
+.dockerignore
+*.md

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    // NestJS 12 ships as ES modules, so compile to Node's native ESM.
+    // Consequence: relative imports must end in ".js" (e.g. './app.module.js').
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2023",
+
+    // NestJS dependency injection relies on decorators plus emitted type metadata.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
