@@ -83,3 +83,53 @@ Envoy every 0.5s; later `--replicas=1`.
     unhealthy backends (Envoy panic mode, AWS target groups failing open...). Readiness in the
     EndpointSlice is an input to that policy, not a guarantee.
 - The PDB can block node maintenance during an outage, because it counts only ready pods.
+
+---
+
+## 3. Out of memory
+
+**Done:** `kubectl -n shop set resources deploy/api -c api --requests=memory=32Mi --limits=memory=32Mi`
+(the request had to drop too: a limit below the request is rejected), with traffic going
+through Envoy every 0.5s. Recovered with `kubectl apply -f k8s/20-api.yaml`.
+
+**Observed:**
+
+- The resource change started a rolling update. The new pod was started 3 times in 29s, then
+  went into `CrashLoopBackOff`; the old pods kept serving. Traffic: only `200` throughout.
+- Pod events: `Startup probe failed: ... connect: connection refused`, `Started (x3)`,
+  `Back-off restarting failed container`. **Nothing about memory.**
+- `describe` → container status:
+  ```
+  Last State:     Terminated
+    Reason:       OOMKilled
+    Exit Code:    137
+    Started:      14:18:46
+    Finished:     14:18:46
+  Restart Count:  3
+  ```
+  Killed in the same second it started: Node.js exceeded 32Mi while still loading, before
+  listening on 8080 (hence the startup probe's "connection refused").
+- `kubectl apply -f k8s/20-api.yaml` restored `requests.memory: 128Mi`, `limits.memory: 256Mi`.
+
+**What it shows:**
+
+- The memory limit is enforced by the kernel: going over it means an immediate SIGKILL. The
+  app can't log anything, so **an OOM kill never shows up in application logs**.
+- **Where to find it:** the container's `Last State` (`Reason: OOMKilled`), not the pod's events
+  (they only say "restarting failed container"). For a whole namespace:
+  ```bash
+  kubectl get pods -o custom-columns='NAME:.metadata.name,LAST_REASON:.status.containerStatuses[0].lastState.terminated.reason'
+  ```
+- **Exit code 137 has two meanings.** Both are SIGKILL (128 + 9):
+  `Reason: OOMKilled` = the kernel, for exceeding the memory limit;
+  `Reason: Error` = e.g. the kubelet after `terminationGracePeriodSeconds` ran out.
+  The exit code alone can't tell them apart; the Reason can.
+- `maxUnavailable: 0` protected users again: a new version that crashes never replaces a
+  working pod.
+- `kubectl apply` resets every field the file sets, including ones changed imperatively with
+  `set resources` (the same reason it resets `replicas`). Recovering by applying the manifest
+  from Git restores the intended state exactly.
+- Sizing: base limits on measured usage (`kubectl top pods`, and later Prometheus over time,
+  including peak load), with headroom. For Node.js specifically, setting `--max-old-space-size`
+  below the container limit makes the JS heap fail first with a logged error, instead of a
+  silent kernel kill.
