@@ -9,6 +9,7 @@
 | Cilium           | 1.20.5   | installed with the cilium CLI                     |
 | cilium CLI       | v0.20.3  |                                                   |
 | metrics-server   | chart 3.14.0 (app v0.9.0) | 0.9.x supports Kubernetes 1.34+   |
+| Envoy Gateway    | v1.10.0  | Envoy 1.40, Gateway API v1.6.1, tested on Kubernetes 1.34–1.37; EOL 2027-05-05 |
 
 ## Create the cluster (Phase 2, Step 1)
 
@@ -28,6 +29,27 @@ helm install metrics-server metrics-server/metrics-server -n kube-system \
   --version 3.14.0 -f cluster/metrics-server-values.yaml
 kubectl -n kube-system rollout status deploy/metrics-server
 kubectl top nodes                      # numbers after about a minute
+```
+
+## Envoy Gateway (Phase 2, Step 7)
+
+Installs the Gateway API CRDs and the controller. The chart is stored in an OCI registry,
+so there is no `helm repo add`.
+
+```bash
+helm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.10.0 \
+  -n envoy-gateway-system --create-namespace
+kubectl -n envoy-gateway-system wait --for=condition=Available deploy/envoy-gateway --timeout=5m
+kubectl apply -f k8s/30-gateway.yaml
+```
+
+kind has no cloud load balancer: the Envoy Service's EXTERNAL-IP stays `<pending>` and the
+Gateway shows `PROGRAMMED: False` (no address). Traffic still works through port-forward:
+
+```bash
+kubectl -n envoy-gateway-system port-forward svc/$(kubectl -n envoy-gateway-system get svc \
+  -l gateway.envoyproxy.io/owning-gateway-name=web -o jsonpath='{.items[0].metadata.name}') 8888:80
+curl -H "Host: shop.local" localhost:8888/api/products
 ```
 
 ## Troubleshooting

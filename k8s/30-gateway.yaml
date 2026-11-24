@@ -1,0 +1,54 @@
+# Exposing the API with Gateway API, implemented by Envoy Gateway.
+#
+# Gateway API splits "ingress" into three resources, usually owned by different people:
+#   GatewayClass - WHICH controller implements gateways (platform team, cluster-wide)
+#   Gateway      - an entry point: listeners, ports, TLS (platform or app team)
+#   HTTPRoute    - WHERE requests go: hostnames, paths -> Services (app team)
+#
+# Envoy Gateway watches these and, for each Gateway, runs an Envoy proxy Deployment plus a
+# LoadBalancer Service in the envoy-gateway-system namespace.
+
+# Cluster-scoped (no namespace). Links the name "eg" to the Envoy Gateway controller.
+# In a bigger setup this would live with the cluster bootstrap, not the app manifests.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+# The entry point: listen for plain HTTP on port 80. By default, only HTTPRoutes in the
+# same namespace as the Gateway (shop) may attach to it.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: web
+  namespace: shop
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+# Routing rule: requests with Host "shop.local" and a path starting with /api go to the
+# api Service. Anything else gets a 404 from Envoy (the app is never reached).
+# Note: /healthz, /readyz and /metrics are deliberately NOT exposed publicly.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api
+  namespace: shop
+spec:
+  parentRefs:
+    - name: web
+  hostnames:
+    - shop.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: api
+          port: 80
