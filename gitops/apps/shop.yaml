@@ -1,0 +1,36 @@
+# Argo CD Application for the shop app.
+#
+# An Application says: render THIS source (a path in a Git repo) and keep it applied
+# to THAT destination (a cluster and namespace). Application objects live in the argocd
+# namespace, wherever their workloads go.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shop
+  namespace: argocd
+spec:
+  # Projects group Applications and limit what they may deploy where (Step 6).
+  # "default" allows everything.
+  project: default
+
+  source:
+    # Argo CD reads GitHub, not your laptop: changes count only once pushed.
+    repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
+    # Follow the tip of main. (Pinning a tag or commit SHA is the stricter alternative.)
+    targetRevision: main
+    path: charts/shop
+    helm:
+      # Must stay "shop": the chart puts the release name into the selector labels
+      # (app.kubernetes.io/instance), and selectors can't change on existing objects.
+      releaseName: shop
+      # Relative to the chart directory.
+      valueFiles:
+        - values-local.yaml
+
+  destination:
+    # The cluster Argo CD itself runs in.
+    server: https://kubernetes.default.svc
+    namespace: shop
+
+  # No syncPolicy yet: Argo CD compares and reports, but only changes the cluster when
+  # you press Sync. Step 3 turns on automated sync.

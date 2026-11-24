@@ -1,9 +1,37 @@
-# Cluster-wide: links the GatewayClass name "eg" to the Envoy Gateway controller.
-# Part of the cluster setup (applied after installing Envoy Gateway), not the app chart:
-# one GatewayClass serves every app's Gateways.
+# Cluster-wide gateway setup for the kind lab. Applied after installing Envoy Gateway
+# (which provides the EnvoyProxy kind). Not part of the app chart: one GatewayClass
+# serves every app's Gateways.
+
+# EnvoyProxy: how Envoy Gateway deploys the Envoy proxy for Gateways of this class.
+# Here: expose it with a ClusterIP Service instead of the default LoadBalancer.
+#
+# Why: kind has no cloud load balancer, so a LoadBalancer Service never gets an external
+# address, the Gateway never becomes "Programmed", and tools that check health (Argo CD)
+# report it as Progressing forever. With ClusterIP the Gateway's address is the
+# Service's in-cluster IP. You still reach it with kubectl port-forward.
+# On EKS this would stay LoadBalancer (provisioned by the AWS Load Balancer Controller).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kind
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+---
+# Links the GatewayClass name "eg" to the Envoy Gateway controller, with the
+# EnvoyProxy settings above.
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
   name: eg
 spec:
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: kind
+    namespace: envoy-gateway-system

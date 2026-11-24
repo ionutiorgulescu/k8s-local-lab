@@ -73,8 +73,11 @@ kubectl -n envoy-gateway-system wait --for=condition=Available deploy/envoy-gate
 kubectl apply -f cluster/gatewayclass.yaml   # cluster-wide; the app's Gateway comes from the chart
 ```
 
-kind has no cloud load balancer: the Envoy Service's EXTERNAL-IP stays `<pending>` and the
-Gateway shows `PROGRAMMED: False` (no address). Traffic still works through port-forward:
+kind has no cloud load balancer. With the default LoadBalancer Service, EXTERNAL-IP stays
+`<pending>`, the Gateway stays `PROGRAMMED: False`, and Argo CD reports it as Progressing
+forever. `cluster/gatewayclass.yaml` therefore links the GatewayClass to an `EnvoyProxy` that
+uses a ClusterIP Service: the Gateway gets the in-cluster IP as its address and becomes
+Programmed. Reach it through port-forward:
 
 ```bash
 kubectl -n envoy-gateway-system port-forward svc/$(kubectl -n envoy-gateway-system get svc \
