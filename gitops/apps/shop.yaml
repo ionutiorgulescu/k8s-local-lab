@@ -32,5 +32,11 @@ spec:
     server: https://kubernetes.default.svc
     namespace: shop
 
-  # No syncPolicy yet: Argo CD compares and reports, but only changes the cluster when
-  # you press Sync. Step 3 turns on automated sync.
+  syncPolicy:
+    automated:
+      # Delete objects from the cluster when they disappear from Git. Without this,
+      # removed objects are only reported (as "requires pruning") and left running.
+      prune: true
+      # Undo changes made directly in the cluster (kubectl edit/delete/patch), not only
+      # apply new Git commits. Git is the only way to change what runs.
+      selfHeal: true
