@@ -7,6 +7,10 @@ api:
   image:
     repository: shop-api
     pullPolicy: IfNotPresent   # the image exists only inside the kind nodes
+  # Prune experiment (Phase 3, Step 3): removing the PDB from Git should make Argo CD
+  # delete it from the cluster. Reverted afterwards with git revert.
+  pdb:
+    enabled: false
 
 gateway:
   hostname: shop.local
