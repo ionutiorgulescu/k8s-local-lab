@@ -255,6 +255,7 @@ running: `kubectl -n shop delete networkpolicy postgres-from-api`, then
 - The restarted pod (`686766f99-6wlqr`) showed the same drops and couldn't become ready.
 - Traffic: `000` (curl's 2s timeout hit before the API's 2s DB timeout), until the policy was
   re-applied: drops stopped at 12:41:31 UTC and traffic returned to `200` at the same moment.
+  The stalled `rollout restart` then completed on its own.
 
 **What it shows:**
 
