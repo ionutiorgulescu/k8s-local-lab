@@ -35,6 +35,21 @@ Usage: include "shop.image" (dict "image" .Values.api.image "defaultTag" .Chart.
 {{- end }}
 
 {{/*
+The API's settings: the ConfigMap's data, and the input of the Deployment's
+checksum/config annotation. Hashing only this (not the whole ConfigMap, whose labels
+include the chart version) means pods roll when a setting changes, not on every chart
+version bump.
+*/}}
+{{- define "shop.apiConfigData" -}}
+DB_HOST: {{ include "shop.dbHost" . | quote }}
+DB_PORT: {{ .Values.database.port | quote }}
+DB_NAME: {{ .Values.database.name | quote }}
+DB_USER: {{ .Values.database.user | quote }}
+LOG_LEVEL: {{ .Values.api.logLevel | quote }}
+SHUTDOWN_DELAY_MS: {{ .Values.api.shutdownDelayMs | quote }}
+{{- end }}
+
+{{/*
 Database host: explicit value, else the in-chart Postgres Service.
 */}}
 {{- define "shop.dbHost" -}}

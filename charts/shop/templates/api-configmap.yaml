@@ -6,9 +6,4 @@ metadata:
     {{- include "shop.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 data:
-  DB_HOST: {{ include "shop.dbHost" . | quote }}
-  DB_PORT: {{ .Values.database.port | quote }}
-  DB_NAME: {{ .Values.database.name | quote }}
-  DB_USER: {{ .Values.database.user | quote }}
-  LOG_LEVEL: {{ .Values.api.logLevel | quote }}
-  SHUTDOWN_DELAY_MS: {{ .Values.api.shutdownDelayMs | quote }}
+  {{- include "shop.apiConfigData" . | nindent 2 }}

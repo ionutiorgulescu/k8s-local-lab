@@ -25,9 +25,10 @@ spec:
         app.kubernetes.io/component: api
       annotations:
         # Env vars are read at container start, so a ConfigMap change alone wouldn't reach
-        # running pods. Hashing the ConfigMap into the pod template makes any config change
-        # alter the template, which triggers a rolling update.
-        checksum/config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
+        # running pods. Hashing the settings into the pod template makes any setting change
+        # alter the template, which triggers a rolling update. Only the data is hashed, so a
+        # chart version bump (which changes labels) doesn't restart pods.
+        checksum/config: {{ include "shop.apiConfigData" . | sha256sum }}
     spec:
       serviceAccountName: api
       terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds }}
