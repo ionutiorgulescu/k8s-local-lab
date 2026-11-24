@@ -1,0 +1,144 @@
+# The shop API: ServiceAccount, ConfigMap, Deployment and Service.
+
+# A dedicated identity for the API pods. The app never calls the Kubernetes API, so it
+# shouldn't carry a token for it: if the app were compromised, an attacker would find
+# no credentials mounted in the container.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  namespace: shop
+automountServiceAccountToken: false
+---
+# Non-secret settings. Injected as environment variables (envFrom below).
+# Note: env vars are read when a container STARTS. Changing this ConfigMap does not affect
+# running pods until they restart (e.g. `kubectl -n shop rollout restart deploy/api`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: shop
+data:
+  DB_HOST: postgres        # the headless Service from 10-postgres.yaml
+  DB_NAME: shop
+  LOG_LEVEL: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never go below the current number of ready pods during an update: start one new
+      # pod (maxSurge: 1), wait until it's ready, then remove one old pod, and repeat.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      serviceAccountName: api
+      # Must be longer than the app's shutdown: SHUTDOWN_DELAY_MS (5s) + time for
+      # in-flight requests to finish. Otherwise the kubelet SIGKILLs it (exit 137).
+      terminationGracePeriodSeconds: 30
+      # By default Kubernetes injects env vars for every Service in the namespace
+      # (e.g. a Service named "db" would inject DB_PORT=tcp://10.96.x.x:5432, silently
+      # overriding the app's DB_PORT). The app doesn't use them, so turn them off.
+      enableServiceLinks: false
+      securityContext:
+        # The image runs as numeric user 65532, so Kubernetes can verify it's not root.
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes: losing one node shouldn't take out every API pod.
+      # ScheduleAnyway = a preference; with too few nodes, pods are still scheduled.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api
+      containers:
+        - name: api
+          image: shop-api:0.1.0
+          # The image only exists inside the kind nodes (kind load), not in a registry.
+          # IfNotPresent uses that copy instead of trying to pull it.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          # Startup probe: gives the app up to 60s (30 x 2s) to start. Liveness and
+          # readiness probes don't run until it succeeds, so a slow start isn't
+          # mistaken for a hung process.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          # Readiness: failing removes the pod from the Service (no traffic), no restart.
+          # /readyz checks Postgres, and fails during graceful shutdown.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          # Liveness: failing 3 times in a row (30s) restarts the container.
+          # /healthz never checks Postgres, so a DB outage doesn't restart the API.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            # requests: what the scheduler reserves on a node; also the base for HPA's
+            # CPU percentage in Step 8.
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            # Memory limit: exceeding it gets the container OOMKilled (Step 11).
+            # No CPU limit on purpose: a CPU limit throttles the app even when the node
+            # has idle CPU. The trade-off: one busy pod can use more than its share.
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            # The app never writes to its own filesystem, so make it read-only: an
+            # attacker can't drop files or modify the code.
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+# A stable virtual IP and DNS name (api.shop.svc.cluster.local) in front of the pods.
+# Only pods that pass their readiness probe receive traffic.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: shop
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http   # the container port NAME, so the port number can change in one place
