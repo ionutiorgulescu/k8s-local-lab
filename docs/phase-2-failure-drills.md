@@ -209,3 +209,61 @@ Now everything (Postgres, both API pods, Envoy) was on lab-worker.
   RDS); and use the drain's `--timeout` so a blocked drain fails visibly.
 - Kubernetes doesn't move pods back after `uncordon`; spread recovers only as pods are replaced
   (or with a tool like the descheduler).
+
+---
+
+## 5. Missing NetworkPolicy rule (debugging with Hubble)
+
+**Setup:** enabled Hubble Relay (`cilium hubble enable`; Cilium chart stayed 1.20.5) and
+installed the `hubble` CLI (v1.20.4). `-P` makes the CLI port-forward to Relay by itself.
+
+**Baseline** (`hubble observe -P --namespace shop --to-label app=postgres --last 20`):
+
+```
+shop/api-...-c2rsk:46060 (ID:3959) -> shop/postgres-0:5432 (ID:11781) to-overlay  FORWARDED (TCP Flags: ACK, PSH)
+shop/api-...-c2rsk:46060 (ID:3959) -> shop/postgres-0:5432 (ID:11781) to-endpoint FORWARDED (TCP Flags: ACK, PSH)
+shop/api-...-qjw6r:43856 (ID:3959) -> shop/postgres-0:5432 (ID:11781) to-endpoint FORWARDED (TCP Flags: ACK, PSH)
+```
+
+- Both API pods share one **security identity** (3959): identities come from labels, which is
+  why policies survive pod restarts and IP changes.
+- Each API pod reused **one** pooled connection (same source port) for minutes, mostly the
+  readiness `SELECT 1`.
+- `to-overlay` = leaving the node through Cilium's VXLAN tunnel (c2rsk was on the other
+  worker); `to-endpoint` = delivered to the pod. Same-node traffic (qjw6r) skips the tunnel.
+  So this cluster uses **tunnel (VXLAN) routing**.
+
+**Done:** with traffic through Envoy and `hubble observe -P --namespace shop --verdict DROPPED -f`
+running: `kubectl -n shop delete networkpolicy postgres-from-api`, then
+`kubectl -n shop rollout restart deploy/api`, then `kubectl apply -f k8s/50-netpol.yaml`.
+
+**Observed:**
+
+```
+12:40:55 api-...-qjw6r:38188 <> postgres-0:5432 Policy denied DROPPED (TCP Flags: SYN)
+12:40:57 api-...-c2rsk:46060 <> postgres-0:5432 policy-verdict:none INGRESS DENIED (TCP Flags: ACK, PSH)
+12:40:57 api-...-c2rsk:46060 <> postgres-0:5432 Policy denied DROPPED (TCP Flags: ACK, PSH)
+12:40:59 api-686766f99-6wlqr:53434 <> postgres-0:5432 Policy denied DROPPED (TCP Flags: SYN)
+12:41:21 api-...-qjw6r:43856 <> postgres-0:5432 Policy denied DROPPED (TCP Flags: ACK, PSH)
+```
+
+- **Established connections were cut too.** The pooled connections from the baseline
+  (46060, 43856) were dropped on their next packet (`ACK, PSH`), 2s and 26s after the policy
+  was deleted. (Expected beforehand: that existing connections would keep working. Wrong.)
+- New connections: every SYN dropped. Each source port appears twice ~1s apart (the kernel's
+  SYN retry), then a new port ~2s later (the app's `connectionTimeoutMillis: 2000`).
+- The restarted pod (`686766f99-6wlqr`) showed the same drops and couldn't become ready.
+- Traffic: `000` (curl's 2s timeout hit before the API's 2s DB timeout), until the policy was
+  re-applied: drops stopped at 12:41:31 UTC and traffic returned to `200` at the same moment.
+
+**What it shows:**
+
+- Hubble answers what Step 9's timeouts couldn't: **who** (pod + identity) tried to reach
+  **whom** (pod + port), and **why** it was refused:
+  `policy-verdict:none INGRESS DENIED` = no ingress rule on the destination matched;
+  `Policy denied DROPPED` = the packet drop and its reason.
+- Removing an allow rule breaks traffic **immediately**, including connections that were
+  already open; it doesn't wait for connections to be recycled.
+- Useful filters: `--verdict DROPPED`, `--namespace`, `--to-label` / `--from-label`,
+  `--to-pod`, `--port`, `-f` (follow), `--last N`.
+- Fix in Git and re-apply: the drops stopped as soon as the policy was back.

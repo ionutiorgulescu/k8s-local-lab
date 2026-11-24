@@ -8,6 +8,7 @@
 | Kubernetes       | v1.36.4  | EKS standard support until 2027-08-02             |
 | Cilium           | 1.20.5   | installed with the cilium CLI                     |
 | cilium CLI       | v0.20.3  |                                                   |
+| hubble CLI       | v1.20.4  | `brew install hubble`                             |
 | metrics-server   | chart 3.14.0 (app v0.9.0) | 0.9.x supports Kubernetes 1.34+   |
 | Envoy Gateway    | v1.10.0  | Envoy 1.40, Gateway API v1.6.1, tested on Kubernetes 1.34–1.37; EOL 2027-05-05 |
 
@@ -20,6 +21,20 @@ cilium install --version 1.20.5
 cilium status --wait
 kubectl get nodes                      # all three Ready
 ```
+
+## Hubble (Phase 2, Step 11)
+
+Hubble records every forward/drop decision Cilium makes. Relay combines all nodes' flows.
+
+```bash
+cilium hubble enable                 # helm upgrade of the cilium release; keeps chart 1.20.5
+cilium status --wait                 # Hubble Relay: OK
+hubble status -P                     # -P: the CLI port-forwards to Relay itself
+hubble observe -P --namespace shop --verdict DROPPED -f
+```
+
+For a fresh cluster, enable it at install time instead:
+`cilium install --version 1.20.5 --set hubble.relay.enabled=true`
 
 ## metrics-server (Phase 2, Step 2)
 
