@@ -1,0 +1,53 @@
+# Autoscaling and disruption protection for the API.
+
+# HorizontalPodAutoscaler: adds or removes API pods based on CPU usage.
+#
+# How it decides: every 15s it reads CPU usage from metrics-server and compares the
+# average across pods with the target, as a percentage of each pod's CPU REQUEST
+# (100m in 20-api.yaml, so 70% = 70m). Then:
+#   desired replicas = ceil(current replicas x current usage / target)
+# e.g. 2 pods averaging 140% -> ceil(2 x 140 / 70) = 4 pods.
+#
+# Scaling down is deliberately slow: by default it uses the highest recommendation from
+# the last 5 minutes, so a short lull in traffic doesn't remove pods you'll need again.
+#
+# Note: the Deployment in 20-api.yaml also sets replicas: 2. While this HPA exists, the HPA
+# owns the replica count, and re-applying 20-api.yaml resets it to 2 until the HPA scales
+# it again. The Helm chart (Step 12) leaves out `replicas` when autoscaling is enabled.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  namespace: shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 2    # never fewer than 2: one pod per worker node for availability
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+# PodDisruptionBudget: limits VOLUNTARY disruptions, i.e. pod evictions someone or
+# something asks for: `kubectl drain`, node upgrades, the cluster autoscaler removing a
+# node. Evictions that would leave fewer than 1 ready API pod are refused until another
+# pod is ready somewhere else.
+#
+# It does NOT protect against involuntary disruptions: a node crashing, the kernel
+# OOM-killing a container, or someone running `kubectl delete pod` directly.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
