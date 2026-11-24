@@ -1,0 +1,109 @@
+# Postgres as a StatefulSet. Hand-written to learn the mechanics; in real clusters use an
+# operator (e.g. CloudNativePG) or a managed database (RDS).
+#
+# StatefulSet vs Deployment:
+#   - Stable names: pods are postgres-0, postgres-1, ... (not random suffixes), and a
+#     replacement pod gets the SAME name.
+#   - Stable storage: each pod gets its own PersistentVolumeClaim from volumeClaimTemplates
+#     (data-postgres-0), and a replacement pod re-attaches to the same claim.
+#   - Ordered: pods are created 0, 1, 2... and deleted in reverse.
+
+# Headless Service (clusterIP: None): no virtual IP and no load balancing. DNS for
+# "postgres" returns the pod IPs directly, and each pod also gets its own stable name:
+# postgres-0.postgres.shop.svc.cluster.local. The API connects to "postgres".
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: shop
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: pg
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: shop
+spec:
+  serviceName: postgres   # the headless Service above; gives pods their DNS names
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # Postgres shuts down with a checkpoint (flushing data to disk). Give it more time
+      # than the default 30s before the kubelet sends SIGKILL.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        # The postgres image has no USER, so it would start as root. Run as the image's
+        # "postgres" user (uid/gid 999 in the Debian variant) to pass the restricted policy.
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        # fsGroup: on volumes that support it (like EBS on EKS), the kubelet makes the volume
+        # group-owned by 999 so Postgres can write to it. kind's local-path volumes don't
+        # support fsGroup, but the provisioner creates their folders world-writable.
+        fsGroup: 999
+        # Only change ownership when the volume's top folder doesn't already match, instead
+        # of walking every file on each mount (slow for large databases).
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:17.12-trixie@sha256:cdbfb3de010ef603c29f10a5dfc79e023f66ad662ec6fddcda7130afe5d65e7b
+          ports:
+            - name: pg
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: shop
+            # Use a subfolder of the volume, not its root. Real disks (EBS) have a
+            # "lost+found" folder at the root, and initdb refuses to start in a non-empty folder.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          # Readiness only, no liveness probe. A liveness failure restarts the container;
+          # for a database, a restart during a slow moment (heavy load, a long checkpoint)
+          # turns slowness into an outage plus crash recovery.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "shop"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  # One PersistentVolumeClaim per pod, named <template name>-<pod name>: data-postgres-0.
+  # No storageClassName, so the cluster's default class is used (on kind: "standard",
+  # served by local-path-provisioner; on EKS you'd typically use a gp3 EBS class).
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
