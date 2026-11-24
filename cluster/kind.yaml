@@ -1,0 +1,22 @@
+# kind cluster for Phase 2.
+#
+# Node image: Kubernetes 1.36.4, built for kind v0.33.0 (see the kind release notes).
+#   - 1.36 is in EKS standard support until 2027-08-02.
+#   - It matches kubectl v1.36 exactly, so there is no version skew.
+#   - The @sha256 digest is required: kind images are built for a specific kind release,
+#     and the digest guarantees you get that build, not whatever the tag points to later.
+#
+# CNI: disabled here; Cilium v1.20.5 is installed afterwards (see cluster/README.md),
+# because kind's default CNI (kindnet) does not enforce NetworkPolicies.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: lab
+networking:
+  disableDefaultCNI: true
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
