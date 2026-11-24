@@ -109,6 +109,11 @@ through Envoy every 0.5s. Recovered with `kubectl apply -f k8s/20-api.yaml`.
   ```
   Killed in the same second it started: Node.js exceeded 32Mi while still loading, before
   listening on 8080 (hence the startup probe's "connection refused").
+- `kubectl get pods -w` timeline for the new pod: `Running` → `OOMKilled` → `CrashLoopBackOff`,
+  restarting at ~1s, 12s, 38s and 83s after creation. The gaps grow because the kubelet waits
+  10s, 20s, 40s... (capped at 5 min) between restarts; `CrashLoopBackOff` is that waiting time.
+  The old pods stayed `1/1 Running` the whole time. At 89s the pod went `Terminating`: the
+  `kubectl apply` below restored the old template and the Deployment removed it.
 - `kubectl apply -f k8s/20-api.yaml` restored `requests.memory: 128Mi`, `limits.memory: 256Mi`.
 
 **What it shows:**
