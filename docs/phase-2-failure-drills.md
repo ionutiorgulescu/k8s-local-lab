@@ -183,9 +183,11 @@ Now everything (Postgres, both API pods, Envoy) was on lab-worker.
 - The replacement API pod on lab-worker2 stayed not ready (`/readyz` 503): no Postgres.
   That's a **deadlock**: the drain waits for a second ready API pod, which waits for Postgres,
   which waits for the node being drained.
-- It was broken by running `kubectl uncordon lab-worker` while the drain was still retrying
-  (~28s in; inferred from events: `postgres-0` and the next API pod were both scheduled onto
-  lab-worker before the drain finished). Postgres came back (~30s of downtime), the API pod on
+- It was broken by running `kubectl uncordon lab-worker` while the drain was still retrying.
+  Confirmed from node events: `lab-worker NodeSchedulable` at 12:28:16Z, and the refused pod
+  (`2kxrd`) `Killing` at 12:28:17Z. Node events trail the real change by several seconds
+  (the kubelet reports node status periodically): Postgres had already restarted on lab-worker
+  at 12:28:10, and the cordon event (12:27:46) came after Postgres had stopped (12:27:41). Postgres came back (~30s of downtime), the API pod on
   lab-worker2 became ready, the PDB allowed the last eviction, and the drain reported
   `node/lab-worker drained` on a node that was already schedulable again.
 - Final state: Postgres back on lab-worker with its data; API pods spread across both workers.
