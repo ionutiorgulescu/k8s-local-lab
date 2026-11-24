@@ -24,6 +24,8 @@ When you change a version here, change it in `bootstrap.sh` too.
 | hubble CLI       | v1.20.4  | `brew install hubble`                             |
 | metrics-server   | chart 3.14.0 (app v0.9.0) | 0.9.x supports Kubernetes 1.34+   |
 | Envoy Gateway    | v1.10.0  | Envoy 1.40, Gateway API v1.6.1, tested on Kubernetes 1.34–1.37; EOL 2027-05-05 |
+| Argo CD          | v3.6.2 (chart argo-cd 10.19.0) | 3.6 tested on Kubernetes 1.34–1.37 |
+| argocd CLI       | v3.6.2   | `brew install argocd`                             |
 
 ## Create the cluster (Phase 2, Step 1)
 
@@ -78,6 +80,30 @@ Gateway shows `PROGRAMMED: False` (no address). Traffic still works through port
 kubectl -n envoy-gateway-system port-forward svc/$(kubectl -n envoy-gateway-system get svc \
   -l gateway.envoyproxy.io/owning-gateway-name=web -o jsonpath='{.items[0].metadata.name}') 8888:80
 curl -H "Host: shop.local" localhost:8888/api/products
+```
+
+## Argo CD (Phase 3, Step 1)
+
+```bash
+helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
+  --version 10.19.0 -n argocd --create-namespace -f gitops/argocd/values.yaml --wait
+```
+
+Web UI (plain HTTP inside the cluster, `server.insecure`):
+
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8080:80   # then http://localhost:8080
+argocd admin initial-password -n argocd                    # first login as admin
+```
+
+CLI: `kubectl port-forward` tends to break on the CLI's gRPC traffic, so let the CLI make
+its own tunnel for every command:
+
+```bash
+export ARGOCD_OPTS='--port-forward --port-forward-namespace argocd --plaintext'
+argocd login --username admin       # server address comes from ARGOCD_OPTS
+argocd account update-password
+kubectl -n argocd delete secret argocd-initial-admin-secret
 ```
 
 ## Troubleshooting

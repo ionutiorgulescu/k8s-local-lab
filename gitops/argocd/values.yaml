@@ -1,0 +1,21 @@
+# Helm values for Argo CD on the kind lab.
+# Chart: argo-cd 10.19.0 (Argo CD v3.6.2) from https://argoproj.github.io/argo-helm
+#
+# Kept small for a laptop: one replica of everything, and the optional components
+# this lab doesn't use yet are turned off.
+
+# Dex is Argo CD's built-in SSO bridge (GitHub, OIDC...). No SSO yet: log in with the
+# local admin account.
+dex:
+  enabled: false
+
+# Sends Slack/email/webhook messages on sync events. Not needed for the lab.
+notifications:
+  enabled: false
+
+configs:
+  params:
+    # Serve the UI and API over plain HTTP inside the cluster. You reach it through
+    # kubectl port-forward (an encrypted tunnel to the pod), so TLS here would only add
+    # self-signed certificate warnings. With a real ingress you'd terminate TLS there.
+    server.insecure: true
