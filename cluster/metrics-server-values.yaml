@@ -1,0 +1,9 @@
+# Helm values for metrics-server on kind.
+# Chart version is pinned on the command line (see cluster/README.md).
+#
+# `args` is added to the chart's built-in `defaultArgs`; it does not replace them.
+args:
+  # kind only: each kubelet serves HTTPS with a self-signed certificate that the
+  # cluster CA did not sign, so metrics-server cannot verify it. This flag skips
+  # that check. On EKS the kubelet certificates are CA-signed, so drop this flag there.
+  - --kubelet-insecure-tls
