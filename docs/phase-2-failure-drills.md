@@ -268,3 +268,47 @@ running: `kubectl -n shop delete networkpolicy postgres-from-api`, then
 - Useful filters: `--verdict DROPPED`, `--namespace`, `--to-label` / `--from-label`,
   `--to-pod`, `--port`, `-f` (follow), `--last N`.
 - Fix in Git and re-apply: the drops stopped as soon as the policy was back.
+
+---
+
+## 6. Rolling update under traffic
+
+**Done:** a counting traffic loop through Envoy (no sleep, `curl -m 3`, printing every non-200),
+first 30s with no changes as a baseline, then `kubectl -n shop rollout restart deploy/api`
+three times, waiting for `rollout status` each time.
+
+**Observed:** **zero failed requests** across all three rollouts; every API pod was replaced
+each time.
+
+**What made it work** (each piece built in an earlier step):
+
+| Piece | Effect |
+|---|---|
+| `maxSurge: 1`, `maxUnavailable: 0` | capacity never dropped below the current replica count |
+| readiness probe on `/readyz` | new pods got traffic only once they could serve it |
+| `/readyz` fails on SIGTERM + 5s `SHUTDOWN_DELAY_MS` | Envoy removed the old pod before it stopped accepting requests |
+| HTTP server closes after in-flight requests finish | no request cut off midway |
+| explicit `process.exit(0)` (app is PID 1) | fast, clean exit instead of waiting for SIGKILL |
+| `terminationGracePeriodSeconds: 30` > shutdown time | the kubelet never killed a pod mid-shutdown |
+
+**Caveats:**
+
+- Modest load: one sequential client through `kubectl port-forward`. Phase 5's k6 tests with
+  many concurrent connections are the real check.
+- Under constant traffic, upstream connections never sat idle for Node's 5s keep-alive
+  timeout, so the classic proxy/keep-alive race (the proxy reusing a connection the app just
+  closed, giving a 502/503) wasn't exercised. Common fix if it shows up: make the app's
+  keep-alive timeout longer than the proxy's idle timeout for upstream connections.
+
+---
+
+## Summary
+
+| # | Drill | Users affected? | Key lesson |
+|---|---|---|---|
+| 1 | Bad image tag | No | `maxUnavailable: 0` makes a broken release harmless; `rollout undo` is an emergency brake, Git is the fix |
+| 2 | Database outage | Errors (unavoidable) | Readiness without restarts works; Envoy's panic mode still routes to not-ready pods; headless DNS disappears with no ready pods |
+| 3 | Out of memory | No | OOM kills only show in `Last State`; exit 137 needs the Reason to interpret |
+| 4 | Node drain | Yes (single Envoy, Postgres) | PDBs protect only if replacements can become ready; local storage pins pods to nodes |
+| 5 | Missing NetworkPolicy | Yes | Hubble shows who/whom/why; removing a rule cuts even established connections |
+| 6 | Rolling update | No | Graceful shutdown + readiness + surge = zero-downtime deploys |
