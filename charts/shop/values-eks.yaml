@@ -1,0 +1,37 @@
+# EKS (later phase). Placeholders in <angle brackets> are filled in when the EKS
+# environment exists.
+#
+#   helm upgrade --install shop charts/shop -n shop -f charts/shop/values-eks.yaml
+
+api:
+  image:
+    # Images come from ECR, pulled with the node's IAM role (no imagePullSecrets).
+    repository: "<account-id>.dkr.ecr.<region>.amazonaws.com/shop-api"
+    pullPolicy: IfNotPresent
+
+  # Real nodes across availability zones: more headroom, and a PDB that keeps
+  # 2 pods up during node upgrades.
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 10
+  pdb:
+    minAvailable: 2
+
+# Managed database instead of the in-cluster StatefulSet. Access to RDS is
+# controlled by AWS security groups, not by Kubernetes NetworkPolicies.
+postgres:
+  enabled: false
+
+database:
+  host: "<rds-endpoint>"
+  # The password Secret is created by External Secrets (Phase 6) from AWS Secrets Manager.
+
+gateway:
+  hostname: "<shop.example.com>"
+
+rbac:
+  developer:
+    # Humans authenticate through IAM; EKS access entries map an IAM role to this group.
+    subjects:
+      - kind: Group
+        name: shop-developers

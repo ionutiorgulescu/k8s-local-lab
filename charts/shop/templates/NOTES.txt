@@ -1,0 +1,10 @@
+shop {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Check the rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/api
+{{- if .Values.gateway.enabled }}
+
+The API is routed through Gateway "{{ .Values.gateway.name }}" for host {{ .Values.gateway.hostname }}, path {{ .Values.gateway.pathPrefix }}.
+On kind, port-forward to the Envoy Service and call:
+  curl -H "Host: {{ .Values.gateway.hostname }}" localhost:8888{{ .Values.gateway.pathPrefix }}/products
+{{- end }}

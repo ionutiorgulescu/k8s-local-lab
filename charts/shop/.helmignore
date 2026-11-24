@@ -1,0 +1,6 @@
+# Files not packaged into the chart.
+.DS_Store
+.git/
+*.swp
+*.bak
+*.tmp

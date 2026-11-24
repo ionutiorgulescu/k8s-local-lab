@@ -55,7 +55,7 @@ so there is no `helm repo add`.
 helm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.10.0 \
   -n envoy-gateway-system --create-namespace
 kubectl -n envoy-gateway-system wait --for=condition=Available deploy/envoy-gateway --timeout=5m
-kubectl apply -f k8s/30-gateway.yaml
+kubectl apply -f cluster/gatewayclass.yaml   # cluster-wide; the app's Gateway comes from the chart
 ```
 
 kind has no cloud load balancer: the Envoy Service's EXTERNAL-IP stays `<pending>` and the

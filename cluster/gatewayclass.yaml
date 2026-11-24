@@ -1,0 +1,9 @@
+# Cluster-wide: links the GatewayClass name "eg" to the Envoy Gateway controller.
+# Part of the cluster setup (applied after installing Envoy Gateway), not the app chart:
+# one GatewayClass serves every app's Gateways.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller

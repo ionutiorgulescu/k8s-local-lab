@@ -1,0 +1,65 @@
+{{- if .Values.rbac.developer.enabled }}
+{{- if .Values.rbac.developer.createServiceAccount }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+---
+{{- end }}
+# Read-only access to the namespace. Deliberately excluded: secrets (list/watch return
+# values), pods/exec (exposes env vars like DB_PASSWORD), port-forward, and all writes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, endpoints, configmaps, events,
+                persistentvolumeclaims, serviceaccounts]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways, httproutes]
+    verbs: [get, list, watch]
+{{- with .Values.rbac.developer.subjects }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer
+  labels:
+    {{- include "shop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: developer
+subjects:
+  {{- range . }}
+  - kind: {{ .kind }}
+    name: {{ .name }}
+    {{- if eq .kind "ServiceAccount" }}
+    namespace: {{ $.Release.Namespace }}
+    {{- else }}
+    apiGroup: rbac.authorization.k8s.io
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}

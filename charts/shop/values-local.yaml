@@ -1,0 +1,19 @@
+# kind cluster: image loaded with `kind load docker-image`, in-cluster Postgres,
+# reached through Envoy Gateway as shop.local.
+#
+#   helm upgrade --install shop charts/shop -n shop -f charts/shop/values-local.yaml
+
+api:
+  image:
+    repository: shop-api
+    pullPolicy: IfNotPresent   # the image exists only inside the kind nodes
+
+gateway:
+  hostname: shop.local
+
+rbac:
+  developer:
+    createServiceAccount: true
+    subjects:
+      - kind: ServiceAccount
+        name: dev

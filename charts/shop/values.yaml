@@ -1,0 +1,95 @@
+# Default values for the shop chart. Environment files (values-local.yaml,
+# values-eks.yaml) override only what differs.
+#
+# Not managed by this chart (created before installing it):
+#   - the namespace, with its Pod Security labels (k8s/00-namespace.yaml)
+#   - the database password Secret (see database.passwordSecret)
+#   - the GatewayClass (cluster-wide, part of the cluster setup)
+
+api:
+  image:
+    repository: shop-api
+    # Empty = use the chart's appVersion.
+    tag: ""
+    # Optional: pin by digest too ("sha256:..."). When set, the digest decides the image.
+    digest: ""
+    pullPolicy: IfNotPresent
+
+  # Used only when autoscaling is disabled. With autoscaling on, the HPA owns the
+  # replica count and the Deployment leaves `replicas` out (so upgrades don't reset it).
+  replicas: 2
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+  logLevel: info
+  # Keep serving this long after SIGTERM, so the proxy stops routing here first.
+  shutdownDelayMs: 5000
+  # Must be longer than shutdownDelayMs plus time for in-flight requests.
+  terminationGracePeriodSeconds: 30
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+database:
+  # Empty = the in-chart Postgres Service ("postgres"). Required when postgres.enabled is false.
+  host: ""
+  port: 5432
+  name: shop
+  user: postgres
+  # Existing Secret holding the password. Never put the password in values files.
+  passwordSecret:
+    name: postgres-credentials
+    key: password
+
+# In-cluster Postgres StatefulSet. Turn off where a managed database (RDS) is used.
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 17.12-trixie
+    digest: sha256:cdbfb3de010ef603c29f10a5dfc79e023f66ad662ec6fddcda7130afe5d65e7b
+  storage:
+    size: 2Gi
+    # Empty = the cluster's default StorageClass.
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Gateway API resources: a Gateway and an HTTPRoute to the API.
+gateway:
+  enabled: true
+  name: web
+  # Must already exist (cluster setup).
+  className: eg
+  hostname: shop.local
+  pathPrefix: /api
+
+networkPolicies:
+  enabled: true
+  # Namespace of the gateway's proxy pods, allowed to reach the API.
+  gatewayNamespace: envoy-gateway-system
+
+# Read-only "developer" Role in the release namespace.
+rbac:
+  developer:
+    enabled: true
+    # Create a ServiceAccount named "dev" (useful for testing with --as).
+    createServiceAccount: false
+    # Who gets the role: ServiceAccounts (namespace added automatically), Users or Groups.
+    subjects: []
