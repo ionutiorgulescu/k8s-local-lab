@@ -138,3 +138,72 @@ through Envoy every 0.5s. Recovered with `kubectl apply -f k8s/20-api.yaml`.
   including peak load), with headroom. For Node.js specifically, setting `--max-old-space-size`
   below the container limit makes the JS heap fail first with a logged error, instead of a
   silent kernel kill.
+
+---
+
+## 4. Node drain
+
+**Before draining:** checked what runs where (`kubectl get pods -A -o wide --field-selector
+spec.nodeName=<node>`, and the PV's node affinity).
+
+| Node | Relevant pods |
+|---|---|
+| lab-worker | `postgres-0` and its local-path volume (PV pinned to this node), API pod, `cilium-operator` (1 replica) |
+| lab-worker2 | the only Envoy proxy pod, Envoy Gateway controller, metrics-server, API pod |
+| control-plane | CoreDNS; tainted, so evicted workloads can only move to the other worker |
+
+### Drain 1: `kubectl drain lab-worker2 --ignore-daemonsets --delete-emptydir-data --timeout=120s`
+
+**Observed:**
+
+- `node/lab-worker2 cordoned`, DaemonSet pods (Cilium, kube-proxy) ignored, then evictions for
+  the API pod, Envoy proxy, Envoy Gateway controller and metrics-server.
+- The API pod eviction was allowed by the PDB (2 ready, minimum 1); its replacement went to
+  lab-worker.
+- The Envoy proxy pod (2/2: Envoy + Envoy Gateway's shutdown-manager sidecar) took noticeably
+  longer to go than the others: it drains connections gradually on SIGTERM.
+- Traffic via the port-forward: `000` from 14:26:06, within a second of the drain (at least
+  10s); the port-forward was attached to that one Envoy pod and had to be restarted.
+- Afterwards, every moved pod was on lab-worker, **both API pods on the same node**
+  (`topologySpreadConstraints` with `ScheduleAnyway` is a preference). After
+  `kubectl uncordon lab-worker2`, nothing moved back: Kubernetes doesn't rebalance running pods.
+
+### Drain 2: `kubectl drain lab-worker --ignore-daemonsets --delete-emptydir-data --timeout=90s`
+
+Now everything (Postgres, both API pods, Envoy) was on lab-worker.
+
+**Observed:**
+
+- One API pod (`dnknc`) evicted at once; the other (`2kxrd`) refused every 5s:
+  `Cannot evict pod as it would violate the pod's disruption budget`. PDB: `ALLOWED DISRUPTIONS 0`.
+- `postgres-0` evicted (no PDB). It shut down cleanly (`database system was shut down at`),
+  and its replacement couldn't be scheduled:
+  `0/3 nodes are available: 1 node(s) didn't match PersistentVolume's node affinity,
+  1 node(s) had untolerated taint(s), 1 node(s) were unschedulable ... Preemption is not helpful`.
+- The replacement API pod on lab-worker2 stayed not ready (`/readyz` 503): no Postgres.
+  That's a **deadlock**: the drain waits for a second ready API pod, which waits for Postgres,
+  which waits for the node being drained.
+- It was broken by running `kubectl uncordon lab-worker` while the drain was still retrying
+  (~28s in; inferred from events: `postgres-0` and the next API pod were both scheduled onto
+  lab-worker before the drain finished). Postgres came back (~30s of downtime), the API pod on
+  lab-worker2 became ready, the PDB allowed the last eviction, and the drain reported
+  `node/lab-worker drained` on a node that was already schedulable again.
+- Final state: Postgres back on lab-worker with its data; API pods spread across both workers.
+
+**What it shows:**
+
+- `kubectl drain` = cordon + evictions through the Eviction API, which enforces PDBs
+  (`kubectl delete pod` doesn't). It's what EKS does to every node in an upgrade.
+- **Check what's on a node before draining it.** Single-replica components (Envoy proxy,
+  Postgres, cilium-operator) mean real downtime, PDB or not.
+- **A PDB protects availability only if the replacement can become ready.** Here readiness
+  depended on Postgres, which depended on the drained node, so the PDB blocked the drain.
+  In production that's a stuck node upgrade.
+- **Local storage pins pods to nodes.** A local-path volume exists on one node's disk, so the
+  pod can only run there. On EKS, EBS volumes are tied to an availability zone: the pod can move,
+  but only to a node in the same zone, which must have capacity.
+- Fixes for production: 2+ Envoy replicas with their own PDB (configured through Envoy
+  Gateway's `EnvoyProxy` resource); a replicated database (an operator like CloudNativePG, or
+  RDS); and use the drain's `--timeout` so a blocked drain fails visibly.
+- Kubernetes doesn't move pods back after `uncordon`; spread recovers only as pods are replaced
+  (or with a tool like the descheduler).
