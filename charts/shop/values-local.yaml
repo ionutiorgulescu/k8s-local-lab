@@ -1,7 +1,7 @@
 # kind cluster: image loaded with `kind load docker-image`, in-cluster Postgres,
 # reached through Envoy Gateway as shop.local.
 #
-#   helm upgrade --install shop charts/shop -n shop -f charts/shop/values-local.yaml
+# Deployed by Argo CD (gitops/apps/shop.yaml): change this file, commit and push.
 
 api:
   image:
