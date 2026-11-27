@@ -1,5 +1,5 @@
-# kind cluster: image loaded with `kind load docker-image`, in-cluster Postgres,
-# reached through Envoy Gateway as shop.localhost.
+# kind cluster: images from GHCR (tags written by CI), in-cluster Postgres, reached through
+# Envoy Gateway as http://shop.localhost:8088.
 #
 # Deployed by Argo CD (gitops/apps/shop.yaml): change this file, commit and push.
 
@@ -20,6 +20,9 @@ rbac:
       - kind: ServiceAccount
         name: dev
 frontend:
+  # Switched on once CI had published a first image (sha-47432b0). repository and tag are
+  # written by CI (.github/workflows/shop-frontend.yml) on every push that changes frontend/.
+  enabled: true
   image:
     repository: ghcr.io/ionutiorgulescu/shop-frontend
     tag: sha-47432b0
