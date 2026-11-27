@@ -51,3 +51,36 @@ Fixed by giving the Application `namespace: envoy-gateway-system`.
   being tested.
 - In production, alert on Applications in `Unknown` or `Degraded` (Argo CD exports metrics for
   this; Prometheus comes in Phase 4).
+
+---
+
+## 2. A chart that doesn't render
+
+**Done:** committed `postgres.enabled: false` in `values-local.yaml` without setting
+`database.host` (the "moving to a managed database but forgot the host" mistake) and pushed.
+Recovered with `git revert`.
+
+**Observed:**
+
+- `shop`: Sync Status **Unknown**, Health **Healthy**, with a condition:
+  ```
+  ComparisonError  Failed to load target state: failed to generate manifest ...
+  failed to execute helm template command: `helm template . --name-template shop --namespace shop
+  --kube-version 1.36.4 --values .../charts/shop/values-local.yaml --include-crds` failed exit status 1:
+  Error: execution error at (shop/templates/api-deployment.yaml:31:28):
+  database.host is required when postgres.enabled is false
+  ```
+- Nothing was applied: `postgres-0` kept its age (2d20h), the API kept serving.
+- After the revert, the condition cleared and the app was Synced again.
+
+**What it shows:**
+
+- When Git can't be rendered, Argo CD reports a **ComparisonError** (sync Unknown) and changes
+  nothing. The error, including the chart's own message, is visible in Argo CD, so a developer
+  without cluster access can see why.
+- The error shows the exact `helm template` command the repo-server runs (release name,
+  namespace, `--kube-version`, `--include-crds`). Running the same command locally reproduces
+  any rendering error.
+- The chart's `fail` guard (Phase 2, Step 12) mattered: without it the chart would have rendered
+  *without* Postgres, and with `prune: true` Argo CD would have deleted the database StatefulSet.
+  Validate dangerous value combinations in the chart, so mistakes fail before they're applied.
