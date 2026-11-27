@@ -1,6 +1,6 @@
 # k8s-lab
 
-Learning project: production-grade Kubernetes on kind, later EKS. Plan: docs/phase-2-plan.md
+Learning project: production-grade Kubernetes on kind, later EKS. Plans: docs/lab/ (phase-2-plan.md, phase-3-plan.md)
 
 ## Rules
 - Pin every version (kind node images, Helm charts, container images). Never use `latest`.
