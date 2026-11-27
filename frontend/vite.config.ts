@@ -6,11 +6,13 @@ export default defineConfig({
   server: {
     // `npm run dev` serves the UI from Vite on localhost:5173. Calls to /api are forwarded
     // to the API in the kind cluster, through the gateway, so the browser sees one origin
-    // (no CORS), exactly like in the cluster. Needs "127.0.0.1 shop.local" in /etc/hosts.
+    // (no CORS), exactly like in the cluster.
     proxy: {
       '/api': {
-        target: 'http://shop.local:8088',
-        changeOrigin: true,
+        // The gateway as published by kind on this Mac. Connect to localhost (Node doesn't
+        // resolve *.localhost names by itself) and send the hostname the HTTPRoute expects.
+        target: 'http://localhost:8088',
+        headers: { host: 'shop.localhost' },
       },
     },
   },

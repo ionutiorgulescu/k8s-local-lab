@@ -10,8 +10,9 @@
 # external address, the Gateway never becomes "Programmed", and Argo CD reports it as
 # Progressing forever.
 # Why NodePort: it opens port 30080 on every node, and cluster/kind.yaml publishes that
-# port on the Mac (127.0.0.1:8088). So http://shop.local:8088 reaches Envoy without
-# kubectl port-forward (with "127.0.0.1 shop.local" in /etc/hosts).
+# port on the Mac (127.0.0.1:8088). So http://shop.localhost:8088 reaches Envoy without
+# kubectl port-forward (*.localhost always means this machine; Safari needs an /etc/hosts
+# line for it).
 # On EKS this would be LoadBalancer (provisioned by the AWS Load Balancer Controller).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy

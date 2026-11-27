@@ -1,5 +1,5 @@
 // Calls to the shop API. Relative paths: the browser sends them to the same host it loaded
-// the page from (shop.local), and the gateway routes /api/* to the API. No CORS needed.
+// the page from (shop.localhost), and the gateway routes /api/* to the API. No CORS needed.
 
 export interface Product {
   id: number;

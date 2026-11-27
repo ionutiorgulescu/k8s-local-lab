@@ -13,10 +13,10 @@ one origin and no CORS is needed.
 
 ```bash
 cd frontend && npm install
-npm run dev          # http://localhost:5173, /api proxied to http://shop.local:8088
+npm run dev          # http://localhost:5173, /api proxied to the cluster's gateway
 ```
 
-Needs the kind cluster running and `127.0.0.1 shop.local` in `/etc/hosts`.
+Needs the kind cluster running (gateway on `localhost:8088`).
 
 ## Build and deploy
 

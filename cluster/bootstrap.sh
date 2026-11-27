@@ -184,15 +184,15 @@ step "Smoke test through the gateway"
 status=""
 for i in $(seq 1 30); do
   status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
-    -H "Host: shop.local" "$GATEWAY_URL/api/products" || true)
+    -H "Host: shop.localhost" "$GATEWAY_URL/api/products" || true)
   [ "$status" = "200" ] && break
   sleep 2
 done
 [ "$status" = "200" ] || die "GET /api/products through $GATEWAY_URL returned '$status'"
 
 info "GET $GATEWAY_URL/api/products -> 200:"
-info "$(curl -s -H 'Host: shop.local' "$GATEWAY_URL/api/products")"
-info "$(curl -s -H 'Host: shop.local' "$GATEWAY_URL/api/version")"
+info "$(curl -s -H 'Host: shop.localhost' "$GATEWAY_URL/api/products")"
+info "$(curl -s -H 'Host: shop.localhost' "$GATEWAY_URL/api/version")"
 
 step "Done"
 cat <<EOF
@@ -206,9 +206,8 @@ cat <<EOF
       export ARGOCD_OPTS='--port-forward --port-forward-namespace argocd --plaintext'
       argocd login --username admin
 
-    Call the API (no port-forward needed):
-      curl -H "Host: shop.local" $GATEWAY_URL/api/products
-    Or in a browser at http://shop.local:8088/api/products, after adding this line to
-    /etc/hosts once (needs sudo):
-      127.0.0.1  shop.local
+    Call the API (no port-forward, no /etc/hosts entry needed):
+      curl http://shop.localhost:8088/api/products
+    Or open http://shop.localhost:8088 in Chrome or Firefox. (Safari needs
+    "127.0.0.1  shop.localhost" in /etc/hosts.)
 EOF

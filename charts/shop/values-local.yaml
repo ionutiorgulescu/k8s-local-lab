@@ -1,5 +1,5 @@
 # kind cluster: image loaded with `kind load docker-image`, in-cluster Postgres,
-# reached through Envoy Gateway as shop.local.
+# reached through Envoy Gateway as shop.localhost.
 #
 # Deployed by Argo CD (gitops/apps/shop.yaml): change this file, commit and push.
 
@@ -12,7 +12,7 @@ api:
     pullPolicy: IfNotPresent
     tag: sha-2900286
 gateway:
-  hostname: shop.local
+  hostname: shop.localhost
 rbac:
   developer:
     createServiceAccount: true

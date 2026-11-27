@@ -100,11 +100,13 @@ uses a **NodePort Service on port 30080**, and `cluster/kind.yaml` publishes tha
 Mac as `127.0.0.1:8088`. No port-forward needed:
 
 ```bash
-curl -H "Host: shop.local" localhost:8088/api/products
+curl http://shop.localhost:8088/api/products
 ```
 
-For the browser, add once to `/etc/hosts` (needs sudo): `127.0.0.1  shop.local`, then open
-http://shop.local:8088/api/products.
+Or open http://shop.localhost:8088 in a browser. Names ending in `.localhost` always mean this
+machine: curl, Chrome and Firefox resolve them with no `/etc/hosts` entry (Safari uses the
+system resolver and needs `127.0.0.1  shop.localhost` in `/etc/hosts`). The lab first used
+`shop.local`, but on macOS `.local` names go to Bonjour (mDNS) first: every lookup took 5 s.
 
 (Before this, the Service was ClusterIP and reached with
 `kubectl -n envoy-gateway-system port-forward svc/<envoy-service> 8888:80`.)

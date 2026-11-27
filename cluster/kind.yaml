@@ -22,7 +22,7 @@ nodes:
   - role: control-plane
     image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
     # Publish the Envoy NodePort (30080, set in gitops/platform/gatewayclass.yaml) on the
-    # Mac, like `docker run -p 127.0.0.1:8088:30080`: http://shop.local:8088 then reaches
+    # Mac, like `docker run -p 127.0.0.1:8088:30080`: http://shop.localhost:8088 then reaches
     # Envoy without kubectl port-forward. Any node works, since a NodePort is open on every
     # node. Only read when the cluster is created.
     #   listenAddress 127.0.0.1: reachable from this Mac only, not from the network.

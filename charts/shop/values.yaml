@@ -102,7 +102,7 @@ gateway:
   name: web
   # Must already exist (cluster setup).
   className: eg
-  hostname: shop.local
+  hostname: shop.localhost
   pathPrefix: /api
 
 networkPolicies:
