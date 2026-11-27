@@ -5,12 +5,11 @@
 
 api:
   image:
-    repository: shop-api
-    pullPolicy: IfNotPresent   # the image exists only inside the kind nodes
-
+    repository: ghcr.io/ionutiorgulescu/shop-api
+    pullPolicy: IfNotPresent # the image exists only inside the kind nodes
+    tag: sha-2900286
 gateway:
   hostname: shop.local
-
 rbac:
   developer:
     createServiceAccount: true
