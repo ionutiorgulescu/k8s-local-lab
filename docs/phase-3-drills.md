@@ -126,3 +126,34 @@ Recovered with `git revert`.
    Never leave a manual change unrecorded.
 3. **Afterwards:** check for leftovers Argo CD can't see (like the `env` entry above), and
    record what happened.
+
+---
+
+## 4. Argo CD down
+
+**Done:** `kubectl -n argocd scale statefulset argocd-application-controller --replicas=0`, then
+changed the ConfigMap by hand (`LOG_LEVEL=debug`), then scaled the controller back to 1.
+
+**Observed:**
+
+- With the controller stopped, `/api/products` through the gateway still returned `200`.
+- The manual ConfigMap change **stayed** `debug` (normally self-healed within seconds).
+- After scaling the controller back up, it caught up and the value returned to `info`.
+
+**What it shows:**
+
+- Argo CD isn't in the request path: if it goes down, the apps keep running exactly as they are.
+  What stops is reconciliation: no syncs of new commits, no self-heal, no drift correction.
+- When it comes back, it compares everything again and fixes drift that happened meanwhile.
+  So an Argo CD outage is a "changes are frozen" incident, not a "the app is down" incident.
+- Worth monitoring anyway: a stopped controller looks exactly like a quiet day. (Phase 4:
+  alert when the controller isn't running or Applications stop being reconciled.)
+
+### Side note: a temporary Degraded after rollouts
+
+Right after the drill 3 cleanup rollout, `shop` (and `root`) briefly showed **Degraded**, then
+recovered by itself. Events at that time: old pods' readiness returning 503 (graceful shutdown),
+and the HPA reporting `FailedGetResourceMetric ... did not receive metrics for targeted pods`
+while metrics-server hadn't measured the new pods yet. Most likely Argo CD's built-in HPA health
+check reported the HPA as unhealthy until metrics arrived (not confirmed per resource). Lesson for
+alerting: alert on Degraded only after it lasts a few minutes, or every rollout will page someone.
