@@ -35,6 +35,12 @@ COPY --from=build /app/dist ./dist
 
 # Numeric UID, not a name: with runAsNonRoot: true, Kubernetes can only verify that a
 # numeric user is non-root. A name like "nonroot" makes the pod fail to start.
+# The Git commit this image was built from, set by CI (--build-arg APP_REVISION=...) and
+# reported by GET /api/version. Placed after the COPY steps so a new value only rebuilds
+# this tiny layer, not the cached ones above.
+ARG APP_REVISION=dev
+ENV APP_REVISION=$APP_REVISION
+
 USER 65532:65532
 EXPOSE 8080
 

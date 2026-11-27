@@ -12,8 +12,10 @@ const { version } = JSON.parse(
 export class VersionController {
   // Reachable through the gateway (the HTTPRoute forwards /api/*), so you can check which
   // version is serving, e.g. during a rolling update.
+  // revision: the Git commit the image was built from (APP_REVISION, set by CI at build
+  // time). "dev" for images built by hand.
   @Get()
   get() {
-    return { version };
+    return { version, revision: process.env.APP_REVISION ?? 'dev' };
   }
 }
