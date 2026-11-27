@@ -20,7 +20,7 @@ and pushed, with traffic going through Envoy. Recovered with `git revert` of tha
   Step 5 propagates a child's health to its parent.
 - After pushing the revert, the broken pod was removed (the Deployment returned to its previous
   ReplicaSet; the old pods were never replaced) and `shop` and `root` went back to Healthy.
-- Traffic through the gateway: TRAFFIC_RESULT
+- Traffic through the gateway: only `200` for the whole drill (~15 minutes of a broken release).
 
 **What it shows:**
 
