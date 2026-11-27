@@ -3,13 +3,16 @@
 # of the app chart: one GatewayClass serves every app's Gateways.
 
 # EnvoyProxy: how Envoy Gateway deploys the Envoy proxy for Gateways of this class.
-# Here: expose it with a ClusterIP Service instead of the default LoadBalancer.
+# Here: expose it with a NodePort Service on a fixed port, 30080, instead of the default
+# LoadBalancer.
 #
-# Why: kind has no cloud load balancer, so a LoadBalancer Service never gets an external
-# address, the Gateway never becomes "Programmed", and tools that check health (Argo CD)
-# report it as Progressing forever. With ClusterIP the Gateway's address is the
-# Service's in-cluster IP. You still reach it with kubectl port-forward.
-# On EKS this would stay LoadBalancer (provisioned by the AWS Load Balancer Controller).
+# Why not LoadBalancer: kind has no cloud load balancer, so the Service never gets an
+# external address, the Gateway never becomes "Programmed", and Argo CD reports it as
+# Progressing forever.
+# Why NodePort: it opens port 30080 on every node, and cluster/kind.yaml publishes that
+# port on the Mac (127.0.0.1:8088). So http://shop.local:8088 reaches Envoy without
+# kubectl port-forward (with "127.0.0.1 shop.local" in /etc/hosts).
+# On EKS this would be LoadBalancer (provisioned by the AWS Load Balancer Controller).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
@@ -20,7 +23,17 @@ spec:
     type: Kubernetes
     kubernetes:
       envoyService:
-        type: ClusterIP
+        type: NodePort
+        # There's no dedicated field for the node port number, so patch the generated
+        # Service (a strategic merge: the entry for port 80 gets nodePort 30080).
+        # A fixed number, because the kind port mapping must know it in advance.
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: 80
+                  nodePort: 30080
 ---
 # Links the GatewayClass name "eg" to the Envoy Gateway controller, with the
 # EnvoyProxy settings above.

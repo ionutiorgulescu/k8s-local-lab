@@ -37,19 +37,6 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die()  { printf '\033[31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# retry <attempts> <seconds between> <command...>
-# For things that don't exist yet right after creation (e.g. a Deployment that a
-# controller creates a few seconds after we apply something).
-retry() {
-  local attempts=$1 delay=$2 i
-  shift 2
-  for ((i = 1; i <= attempts; i++)); do
-    if "$@" >/dev/null 2>&1; then return 0; fi
-    sleep "$delay"
-  done
-  "$@"   # last try, showing its error
-}
-
 # Use a private, empty Helm configuration for this script. Your global Helm repos
 # (and their cache) can't break or change the result: in Phase 2, a stale cache for
 # an unrelated repo made `cilium install` fail.
@@ -58,12 +45,12 @@ export HELM_CONFIG_HOME="$HELM_TMP/config"
 export HELM_CACHE_HOME="$HELM_TMP/cache"
 export HELM_DATA_HOME="$HELM_TMP/data"
 
-PF_PID=""
-cleanup() {
-  if [ -n "$PF_PID" ]; then kill "$PF_PID" 2>/dev/null || true; fi
-  rm -rf "$HELM_TMP"
-}
+cleanup() { rm -rf "$HELM_TMP"; }
 trap cleanup EXIT
+
+# Where the gateway is published on this Mac (cluster/kind.yaml: 127.0.0.1:8088 -> NodePort
+# 30080 -> Envoy). Keep in sync with those two files.
+GATEWAY_URL="http://localhost:8088"
 
 # ---------------------------------------------------------------------------
 step "Checking prerequisites"
@@ -177,32 +164,21 @@ kubectl -n argocd get applications
 # ---------------------------------------------------------------------------
 step "Smoke test through the gateway"
 # ---------------------------------------------------------------------------
-# Envoy Gateway creates the proxy Deployment and Service a few seconds after the
-# Gateway exists, so wait for them to appear first.
-GW_SELECTOR="gateway.envoyproxy.io/owning-gateway-name=web,gateway.envoyproxy.io/owning-gateway-namespace=$NAMESPACE"
-retry 30 2 kubectl -n envoy-gateway-system get svc -l "$GW_SELECTOR" -o name
-retry 30 2 kubectl -n envoy-gateway-system wait --for=condition=Available deploy \
-  -l "$GW_SELECTOR" --timeout=10s
-ENVOY_SVC=$(kubectl -n envoy-gateway-system get svc -l "$GW_SELECTOR" \
-  -o jsonpath='{.items[0].metadata.name}')
-
-LOCAL_PORT=18888
-kubectl -n envoy-gateway-system port-forward "svc/$ENVOY_SVC" "$LOCAL_PORT:80" >/dev/null 2>&1 &
-PF_PID=$!
-# Detach it from the shell's job list, so stopping it on exit doesn't print "Terminated".
-disown "$PF_PID"
-
+# Straight through the kind port mapping and the Envoy NodePort: no port-forward.
+# The Host header picks the HTTPRoute, so this works without the /etc/hosts entry.
+# Envoy may need a few more seconds after the apps report Healthy, so retry for a minute.
 status=""
 for i in $(seq 1 30); do
   status=$(curl -s -o /dev/null -m 2 -w '%{http_code}' \
-    -H "Host: shop.local" "localhost:$LOCAL_PORT/api/products" || true)
+    -H "Host: shop.local" "$GATEWAY_URL/api/products" || true)
   [ "$status" = "200" ] && break
   sleep 2
 done
-[ "$status" = "200" ] || die "GET /api/products through the gateway returned '$status'"
+[ "$status" = "200" ] || die "GET /api/products through $GATEWAY_URL returned '$status'"
 
-info "GET /api/products -> 200:"
-info "$(curl -s -H 'Host: shop.local' "localhost:$LOCAL_PORT/api/products")"
+info "GET $GATEWAY_URL/api/products -> 200:"
+info "$(curl -s -H 'Host: shop.local' "$GATEWAY_URL/api/products")"
+info "$(curl -s -H 'Host: shop.local' "$GATEWAY_URL/api/version")"
 
 step "Done"
 cat <<EOF
@@ -216,7 +192,9 @@ cat <<EOF
       export ARGOCD_OPTS='--port-forward --port-forward-namespace argocd --plaintext'
       argocd login --username admin
 
-    Call the API:
-      kubectl -n envoy-gateway-system port-forward svc/$ENVOY_SVC 8888:80
-      curl -H "Host: shop.local" localhost:8888/api/products
+    Call the API (no port-forward needed):
+      curl -H "Host: shop.local" $GATEWAY_URL/api/products
+    Or in a browser at http://shop.local:8088/api/products, after adding this line to
+    /etc/hosts once (needs sudo):
+      127.0.0.1  shop.local
 EOF

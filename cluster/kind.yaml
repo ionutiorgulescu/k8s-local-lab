@@ -1,4 +1,4 @@
-# kind cluster for Phase 2.
+# kind cluster for the lab (Phases 2 and 3).
 #
 # Node image: Kubernetes 1.36.4, built for kind v0.33.0 (see the kind release notes).
 #   - 1.36 is in EKS standard support until 2027-08-02.
@@ -16,6 +16,18 @@ networking:
 nodes:
   - role: control-plane
     image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    # Publish the Envoy NodePort (30080, set in gitops/platform/gatewayclass.yaml) on the
+    # Mac, like `docker run -p 127.0.0.1:8088:30080`: http://shop.local:8088 then reaches
+    # Envoy without kubectl port-forward. Any node works, since a NodePort is open on every
+    # node. Only read when the cluster is created.
+    #   listenAddress 127.0.0.1: reachable from this Mac only, not from the network.
+    #   hostPort 8088: macOS doesn't let normal programs bind ports below 1024 on a
+    #   specific address, and 8080/8888 are used by the Argo CD and Envoy port-forwards.
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8088
+        listenAddress: "127.0.0.1"
+        protocol: TCP
   - role: worker
     image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
   - role: worker

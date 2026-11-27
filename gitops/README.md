@@ -15,7 +15,7 @@ gitops/
 │   └── shop.yaml             wave 2  charts/shop with values-local.yaml
 └── platform/
     ├── namespace-shop.yaml   shop namespace, restricted Pod Security; never deleted by Argo CD
-    └── gatewayclass.yaml     GatewayClass "eg" + EnvoyProxy (ClusterIP Service on kind)
+    └── gatewayclass.yaml     GatewayClass "eg" + EnvoyProxy (NodePort 30080 on kind)
 ```
 
 **Sync waves:** the root app creates lower waves first and waits for them to be Healthy

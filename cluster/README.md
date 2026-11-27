@@ -84,15 +84,19 @@ kubectl apply -f gitops/platform/gatewayclass.yaml   # cluster-wide; the app's G
 
 kind has no cloud load balancer. With the default LoadBalancer Service, EXTERNAL-IP stays
 `<pending>`, the Gateway stays `PROGRAMMED: False`, and Argo CD reports it as Progressing
-forever. `gitops/platform/gatewayclass.yaml` therefore links the GatewayClass to an `EnvoyProxy` that
-uses a ClusterIP Service: the Gateway gets the in-cluster IP as its address and becomes
-Programmed. Reach it through port-forward:
+forever. So `gitops/platform/gatewayclass.yaml` links the GatewayClass to an `EnvoyProxy` that
+uses a **NodePort Service on port 30080**, and `cluster/kind.yaml` publishes that port on the
+Mac as `127.0.0.1:8088`. No port-forward needed:
 
 ```bash
-kubectl -n envoy-gateway-system port-forward svc/$(kubectl -n envoy-gateway-system get svc \
-  -l gateway.envoyproxy.io/owning-gateway-name=web -o jsonpath='{.items[0].metadata.name}') 8888:80
-curl -H "Host: shop.local" localhost:8888/api/products
+curl -H "Host: shop.local" localhost:8088/api/products
 ```
+
+For the browser, add once to `/etc/hosts` (needs sudo): `127.0.0.1  shop.local`, then open
+http://shop.local:8088/api/products.
+
+(Before this, the Service was ClusterIP and reached with
+`kubectl -n envoy-gateway-system port-forward svc/<envoy-service> 8888:80`.)
 
 ## Argo CD (Phase 3, Step 1)
 
