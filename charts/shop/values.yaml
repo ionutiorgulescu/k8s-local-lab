@@ -1,5 +1,5 @@
-# Default values for the shop chart. Environment files (values-local.yaml,
-# values-eks.yaml) override only what differs.
+# Default values for the shop chart. Each environment overrides only what differs, in
+# gitops/envs/<env>/shop.yaml (local = the kind lab, eks = later).
 #
 # Not managed by this chart (created before installing it):
 #   - the namespace, with its Pod Security labels (gitops/platform/namespace-shop.yaml)

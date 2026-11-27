@@ -10,7 +10,7 @@
 #        gateway.
 #
 # The shop-api image isn't built here: CI (.github/workflows/shop-api.yml) publishes it to
-# GHCR and writes its tag into charts/shop/values-local.yaml; the nodes pull it from there.
+# GHCR and writes its tag into gitops/envs/local/shop.yaml; the nodes pull it from there.
 #
 # Safe to re-run: every step skips work that's already done or is idempotent.
 # Written for the bash 3.2 that ships with macOS (no bash 4 features).

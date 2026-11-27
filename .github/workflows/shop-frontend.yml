@@ -2,7 +2,7 @@
 #
 #   push to main touching services/frontend/  ->  build linux/amd64 + linux/arm64
 #                                    ->  push ghcr.io/<owner>/shop-frontend:sha-<commit>
-#                                    ->  commit the new image into charts/shop/values-local.yaml
+#                                    ->  commit the new image into gitops/envs/local/shop.yaml
 #                                    ->  Argo CD syncs that commit (once frontend.enabled is true)
 #
 # The Dockerfile builds the static files once, on the runner's own platform
@@ -28,7 +28,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/shop-frontend
-  VALUES_FILE: charts/shop/values-local.yaml
+  VALUES_FILE: gitops/envs/local/shop.yaml
 
 jobs:
   build-and-deploy:

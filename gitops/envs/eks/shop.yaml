@@ -1,7 +1,8 @@
 # EKS (later phase). Placeholders in <angle brackets> are filled in when the EKS
 # environment exists.
 #
-#   helm upgrade --install shop charts/shop -n shop -f charts/shop/values-eks.yaml
+# Used the same way as gitops/envs/local/shop.yaml: an Argo CD Application with the chart
+# as one source and this file as $values/gitops/envs/eks/shop.yaml.
 
 api:
   image:

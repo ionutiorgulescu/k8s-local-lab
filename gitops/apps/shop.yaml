@@ -16,19 +16,27 @@ spec:
   # cluster-scoped objects.
   project: shop
 
-  source:
-    # Argo CD reads GitHub, not your laptop: changes count only once pushed.
-    repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
-    # Follow the tip of main. (Pinning a tag or commit SHA is the stricter alternative.)
-    targetRevision: main
-    path: charts/shop
-    helm:
-      # Must stay "shop": the chart puts the release name into the selector labels
-      # (app.kubernetes.io/instance), and selectors can't change on existing objects.
-      releaseName: shop
-      # Relative to the chart directory.
-      valueFiles:
-        - values-local.yaml
+  # Two sources from the same repository (Argo CD "multiple sources"):
+  #   1. the chart, charts/shop: a reusable package with only default values
+  #   2. "values": not rendered itself, just a place to read files from. The environment's
+  #      settings live in gitops/envs/local/shop.yaml, separate from the chart, so adding an
+  #      environment is a new file, and CI's image-tag commits don't touch the chart.
+  # Argo CD reads GitHub, not your laptop: changes count only once pushed.
+  sources:
+    - repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
+      # Follow the tip of main. (Pinning a tag or commit SHA is the stricter alternative.)
+      targetRevision: main
+      path: charts/shop
+      helm:
+        # Must stay "shop": the chart puts the release name into the selector labels
+        # (app.kubernetes.io/instance), and selectors can't change on existing objects.
+        releaseName: shop
+        # $values = the root of the source with ref "values" below.
+        valueFiles:
+          - $values/gitops/envs/local/shop.yaml
+    - repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
+      targetRevision: main
+      ref: values
 
   destination:
     # The cluster Argo CD itself runs in.

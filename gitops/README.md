@@ -12,11 +12,19 @@ gitops/
 │   ├── metrics-server.yaml   wave 0  Helm chart from upstream, pinned
 │   ├── envoy-gateway.yaml    wave 0  Helm chart (OCI), pinned; server-side apply
 │   ├── platform.yaml         wave 1  manifests in platform/
-│   └── shop.yaml             wave 2  charts/shop with values-local.yaml
-└── platform/
-    ├── namespace-shop.yaml   shop namespace, restricted Pod Security; never deleted by Argo CD
-    └── gatewayclass.yaml     GatewayClass "eg" + EnvoyProxy (NodePort 30080 on kind)
+│   └── shop.yaml             wave 2  charts/shop + envs/local/shop.yaml (two sources)
+├── platform/
+│   ├── namespace-shop.yaml   shop namespace, restricted Pod Security; never deleted by Argo CD
+│   └── gatewayclass.yaml     GatewayClass "eg" + EnvoyProxy (NodePort 30080 on kind)
+└── envs/                     per-environment settings for the shop chart
+    ├── local/shop.yaml       the kind lab; CI writes the image tags here
+    └── eks/shop.yaml         later (placeholders)
 ```
+
+**Chart vs environment:** `charts/shop` is a reusable package with defaults only. What
+differs per environment (image tags, hostnames, replicas, whether Postgres runs in the
+cluster) lives in `envs/<env>/shop.yaml`. The `shop` Application combines the two using
+Argo CD's multiple sources (`$values/gitops/envs/local/shop.yaml`).
 
 **Sync waves:** the root app creates lower waves first and waits for them to be Healthy
 (needs the Application health check in `argocd/values.yaml`).
@@ -35,13 +43,13 @@ kubectl -n shop create secret generic postgres-credentials \
   --from-literal=password="$(openssl rand -base64 24)"
 ```
 
-## The shop-api image
+## The images
 
-Built by CI, not by bootstrap: on every push to `main` that changes `services/api/` or `services/frontend/`,
-`.github/workflows/shop-api.yml` builds the image (amd64 + arm64), publishes
-`ghcr.io/ionutiorgulescu/shop-api:sha-<commit>`, and commits that tag into
-`charts/shop/values-local.yaml`. Argo CD deploys it like any other change.
-`GET /api/version` shows the commit that's running.
+Built by CI, not by bootstrap: on every push to `main` that changes code in
+`services/api/` or `services/frontend/`, its workflow builds the image (amd64 + arm64),
+publishes `ghcr.io/ionutiorgulescu/shop-<service>:sha-<commit>`, and commits that tag into
+`envs/local/shop.yaml`. Argo CD deploys it like any other change. `GET /api/version` and
+the page footer show the commits that are running.
 
 CI adds commits to `main`, so `git pull` before you push.
 

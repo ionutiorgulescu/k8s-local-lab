@@ -2,7 +2,7 @@
 #
 #   push to main touching services/api/  ->  build linux/amd64 + linux/arm64
 #                               ->  push ghcr.io/<owner>/shop-api:sha-<commit>
-#                               ->  commit the new image into charts/shop/values-local.yaml
+#                               ->  commit the new image into gitops/envs/local/shop.yaml
 #                               ->  Argo CD syncs that commit (rolling update)
 #
 # Actions are pinned by commit SHA (a tag like v4 can be moved to other code).
@@ -29,7 +29,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/shop-api
-  VALUES_FILE: charts/shop/values-local.yaml
+  VALUES_FILE: gitops/envs/local/shop.yaml
 
 jobs:
   build-and-deploy:
