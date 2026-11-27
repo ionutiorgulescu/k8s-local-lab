@@ -11,7 +11,6 @@ api:
     # Tags are never reused (one per commit), so a cached copy is always the right one.
     pullPolicy: IfNotPresent
     tag: sha-2900286
-
 gateway:
   hostname: shop.local
 rbac:
@@ -20,3 +19,7 @@ rbac:
     subjects:
       - kind: ServiceAccount
         name: dev
+frontend:
+  image:
+    repository: ghcr.io/ionutiorgulescu/shop-frontend
+    tag: sha-47432b0
