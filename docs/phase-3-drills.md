@@ -154,6 +154,52 @@ changed the ConfigMap by hand (`LOG_LEVEL=debug`), then scaled the controller ba
 Right after the drill 3 cleanup rollout, `shop` (and `root`) briefly showed **Degraded**, then
 recovered by itself. Events at that time: old pods' readiness returning 503 (graceful shutdown),
 and the HPA reporting `FailedGetResourceMetric ... did not receive metrics for targeted pods`
-while metrics-server hadn't measured the new pods yet. Most likely Argo CD's built-in HPA health
-check reported the HPA as unhealthy until metrics arrived (not confirmed per resource). Lesson for
+while metrics-server hadn't measured the new pods yet. Argo CD's built-in HPA health check
+reports the HPA as unhealthy until metrics arrive. Supported by drill 5: deleting metrics-server
+(no metrics at all) turned `shop` and `root` Degraded with nothing else changed. Lesson for
 alerting: alert on Degraded only after it lasts a few minutes, or every rollout will page someone.
+
+---
+
+## 5. Deleting an Application
+
+**Done:** (a) `argocd app delete shop --cascade=false`; (b) `argocd app delete metrics-server`
+(cascading, the CLI's default). Cascade was tried on metrics-server rather than shop on purpose:
+a cascading delete of shop would delete the API and the Postgres StatefulSet.
+
+**Observed:**
+
+- (a) Non-cascading: the shop Deployment and StatefulSet kept their age (2d20h), no pod restarted.
+  Within seconds `root` recreated the `shop` Application, which adopted the existing objects:
+  Synced and Healthy.
+- (b) Cascading: Argo CD deleted metrics-server's objects; `kubectl top nodes` failed with
+  `Metrics API not available`. `root` recreated the Application, which reinstalled metrics-server
+  (its Deployment was 3s old, 0/1), and `top` worked again about a minute later.
+- While metrics-server was gone, `shop` and `root` showed **Degraded**: the shop HPA had no
+  metrics, and Argo CD's HPA health check reports that as unhealthy.
+
+**What it shows:**
+
+- **Non-cascading delete** removes only the Application; its objects keep running, unmanaged.
+  **Cascading delete** removes everything the Application manages.
+- **App of Apps makes deleted Applications come back** (root self-heals its children). That
+  protects against accidental deletes, but a cascading delete still causes a real outage until
+  everything is reinstalled. To remove an app for good, delete its file from `gitops/apps/` in Git.
+- What survived because it isn't managed by the Application: the Postgres volume (created by the
+  StatefulSet, not by Argo CD), the password Secret (created by hand), and the `shop` namespace
+  (owned by `platform`, with `Delete=false`).
+- **Applications depend on each other in ways Git doesn't show:** deleting metrics-server degraded
+  shop. Order and health between apps is only partly expressed by sync waves.
+
+---
+
+## Summary
+
+| # | Drill | Users affected? | Key lesson |
+|---|---|---|---|
+| 1 | Bad image tag commit | No (200 throughout) | Synced ≠ Healthy; Degraded only after the progress deadline; roll back with `git revert` |
+| – | Rejected `platform` app (found during 1) | No | An Application rejected by its project fails quietly: Unknown, objects unmanaged |
+| 2 | Chart that doesn't render | No | ComparisonError, nothing applied; the chart's `fail` guard prevented deleting Postgres |
+| 3 | Manual hotfix | No | Self-heal reverts changes to fields in Git, not additions; root protects Application specs |
+| 4 | Argo CD down | No | Apps keep running; reconciliation stops and catches up afterwards |
+| 5 | Deleting Applications | Only with cascade | Non-cascade orphans, cascade deletes; root recreates deleted apps; hidden cross-app dependencies |
