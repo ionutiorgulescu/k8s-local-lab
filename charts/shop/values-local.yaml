@@ -10,7 +10,7 @@ api:
     repository: ghcr.io/ionutiorgulescu/shop-api
     # Tags are never reused (one per commit), so a cached copy is always the right one.
     pullPolicy: IfNotPresent
-    tag: sha-2900286
+    tag: sha-0639e79
 gateway:
   hostname: shop.localhost
 rbac:
