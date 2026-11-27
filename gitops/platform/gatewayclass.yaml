@@ -24,6 +24,12 @@ spec:
     kubernetes:
       envoyService:
         type: NodePort
+        # Envoy Gateway defaults to Local: external traffic may only use an Envoy pod on the
+        # node it arrived at (keeps the client's IP). The kind port mapping always lands on
+        # the control-plane, which never runs Envoy, so with Local every request from the Mac
+        # was dropped. Cluster: any node forwards to Envoy wherever it runs; Envoy then sees
+        # the node's address instead of the client's (fine for this lab).
+        externalTrafficPolicy: Cluster
         # There's no dedicated field for the node port number, so patch the generated
         # Service (a strategic merge: the entry for port 80 gets nodePort 30080).
         # A fixed number, because the kind port mapping must know it in advance.
