@@ -1,0 +1,113 @@
+# Reusable workflow: build one service's image, publish it to GHCR, and deploy it through Git.
+# Called by shop-api.yml and shop-frontend.yml, which only decide WHEN it runs.
+#
+#   services/<service>/  ->  build linux/amd64 + linux/arm64
+#                        ->  push ghcr.io/<owner>/shop-<service>:sha-<commit>
+#                        ->  commit .<service>.image.{repository,tag} into the environment file
+#                        ->  Argo CD syncs that commit (rolling update)
+#
+# Actions are pinned by commit SHA (a tag like v4 can be moved to other code).
+name: build-and-deploy
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Folder under services/, image name suffix, and key in the values file (api or frontend)
+        required: true
+        type: string
+      values-file:
+        description: Environment file that receives the new image tag
+        required: false
+        type: string
+        default: gitops/envs/local/shop.yaml
+
+# The caller grants these; a called workflow can't get more than its caller gives it.
+permissions:
+  contents: write   # commit the new image tag
+  packages: write   # push to GHCR
+
+env:
+  SERVICE: ${{ inputs.service }}
+  IMAGE: ghcr.io/${{ github.repository_owner }}/shop-${{ inputs.service }}
+  VALUES_FILE: ${{ inputs.values-file }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      # The service name ends up in paths and in a yq expression: accept known names only.
+      - name: Check the service name
+        run: |
+          case "$SERVICE" in
+            api|frontend) echo "Building $SERVICE" ;;
+            *) echo "Unknown service: $SERVICE" >&2; exit 1 ;;
+          esac
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # full history, so the deploy commit can rebase cleanly
+
+      - name: Compute the image tag
+        id: vars
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # The kind nodes on an Apple Silicon Mac are arm64, GitHub's runners amd64 (and EKS
+      # nodes may be either). QEMU emulates arm64 so one build produces both. (The frontend's
+      # Dockerfile builds its static files on the runner's own platform, so it barely needs it.)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Standard OCI labels; org.opencontainers.image.source links the package to this repo.
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=raw,value=${{ steps.vars.outputs.tag }}
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: services/${{ inputs.service }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: APP_REVISION=${{ github.sha }}
+          # One cache per service, so they don't evict each other.
+          cache-from: type=gha,scope=shop-${{ inputs.service }}
+          cache-to: type=gha,scope=shop-${{ inputs.service }},mode=max
+
+      # Deploy = a Git commit. Argo CD picks it up like any other change. Commits made with
+      # the built-in token don't trigger workflows, and this one only touches gitops/envs/,
+      # so there's no loop. Both services' pipelines may finish together, so the push is
+      # retried on top of whatever the other one just pushed.
+      - name: Commit the new image to Git
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          yq -i ".${SERVICE}.image.repository = strenv(IMAGE) | .${SERVICE}.image.tag = strenv(TAG)" "$VALUES_FILE"
+          git diff --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$VALUES_FILE"
+          git commit -m "Deploy shop-${SERVICE} ${TAG}" \
+            -m "Built from ${GITHUB_SHA} by workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            echo "Push attempt $attempt failed; retrying" >&2
+            sleep $((attempt * 5))
+          done
+          exit 1
