@@ -31,6 +31,31 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+{{- if .Values.frontend.enabled }}
+---
+# Gateway proxy pods -> frontend (nginx) container port. Nothing else talks to it: the
+# browser calls the API through the gateway, not through the frontend pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-from-gateway
+  labels:
+    {{- include "shop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "shop.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicies.gatewayNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}
 {{- if .Values.postgres.enabled }}
 ---
 # API pods -> Postgres, same namespace only.

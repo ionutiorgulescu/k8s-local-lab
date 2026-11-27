@@ -24,6 +24,8 @@ spec:
     - name: {{ .Values.gateway.name }}
   hostnames:
     - {{ .Values.gateway.hostname | quote }}
+  # When several rules match, Gateway API picks the longest path prefix: /api/... goes to
+  # the API, everything else to the frontend.
   rules:
     - matches:
         - path:
@@ -32,4 +34,13 @@ spec:
       backendRefs:
         - name: api
           port: 80
+    {{- if .Values.frontend.enabled }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+    {{- end }}
 {{- end }}
