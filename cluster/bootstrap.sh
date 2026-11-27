@@ -5,9 +5,12 @@
 #
 #   ./cluster/bootstrap.sh
 #
-# Steps: kind cluster -> Cilium -> shop-api image -> Argo CD -> namespace + DB password
-#        -> root Application -> wait until every Application is Synced and Healthy
-#        -> smoke test through the gateway.
+# Steps: kind cluster -> Cilium -> Argo CD -> namespace + DB password -> root Application
+#        -> wait until every Application is Synced and Healthy -> smoke test through the
+#        gateway.
+#
+# The shop-api image isn't built here: CI (.github/workflows/shop-api.yml) publishes it to
+# GHCR and writes its tag into charts/shop/values-local.yaml; the nodes pull it from there.
 #
 # Safe to re-run: every step skips work that's already done or is idempotent.
 # Written for the bash 3.2 that ships with macOS (no bash 4 features).
@@ -26,10 +29,6 @@ APPS_TIMEOUT_SECONDS=900               # how long to wait for all Applications
 
 # Run from the repo root, wherever the script is called from.
 cd "$(dirname "$0")/.."
-
-# The image tag comes from the chart's appVersion, so the image and the chart agree.
-APP_VERSION=$(awk -F'"' '/^appVersion:/ {print $2}' charts/shop/Chart.yaml)
-IMAGE="shop-api:${APP_VERSION}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -88,7 +87,7 @@ ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
 if [ "$ahead" != "0" ]; then
   info "Warning: $ahead local commit(s) not on origin/main. Argo CD deploys GitHub's main: push first."
 fi
-info "All tools found. App image: $IMAGE"
+info "All tools found."
 
 # ---------------------------------------------------------------------------
 step "kind cluster '$CLUSTER_NAME'"
@@ -112,14 +111,6 @@ else
 fi
 cilium status --wait --wait-duration 5m >/dev/null
 kubectl wait --for=condition=Ready nodes --all --timeout=5m
-
-# ---------------------------------------------------------------------------
-step "Build $IMAGE and load it into the kind nodes"
-# ---------------------------------------------------------------------------
-# Argo CD can only deploy images that exist. There's no registry or CI yet, so the
-# image is built here and copied into every node.
-docker build -t "$IMAGE" app/
-kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
 
 # ---------------------------------------------------------------------------
 step "Argo CD (chart $ARGOCD_CHART_VERSION)"

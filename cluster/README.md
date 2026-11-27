@@ -7,7 +7,7 @@
 ```
 
 Does only what Argo CD can't do for itself: creates the kind cluster, installs Cilium (with
-Hubble Relay), builds and loads the `shop-api` image, installs Argo CD, creates the `shop`
+Hubble Relay), installs Argo CD, creates the `shop`
 namespace and the database password, and applies `gitops/root.yaml`. Argo CD then deploys
 everything else from GitHub's `main` (see `gitops/README.md`). The script waits until every
 Application is Synced and Healthy, then checks `/api/products` through the gateway.

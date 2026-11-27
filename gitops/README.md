@@ -28,13 +28,22 @@ don't belong in Git:
 
 - the kind cluster and Cilium (no pod networking without it)
 - Argo CD itself, and `root.yaml`
-- the `shop-api` image (`kind load`; a registry and CI come later)
 - the database password (until External Secrets in Phase 6):
 
 ```bash
 kubectl -n shop create secret generic postgres-credentials \
   --from-literal=password="$(openssl rand -base64 24)"
 ```
+
+## The shop-api image
+
+Built by CI, not by bootstrap: on every push to `main` that changes `app/`,
+`.github/workflows/shop-api.yml` builds the image (amd64 + arm64), publishes
+`ghcr.io/ionutiorgulescu/shop-api:sha-<commit>`, and commits that tag into
+`charts/shop/values-local.yaml`. Argo CD deploys it like any other change.
+`GET /api/version` shows the commit that's running.
+
+CI adds commits to `main`, so `git pull` before you push.
 
 ## Pod Security
 

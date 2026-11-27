@@ -5,9 +5,13 @@
 
 api:
   image:
+    # repository and tag are written by CI (.github/workflows/shop-api.yml) on every push
+    # that changes app/: the image built from that commit, published to GHCR.
     repository: ghcr.io/ionutiorgulescu/shop-api
-    pullPolicy: IfNotPresent # the image exists only inside the kind nodes
+    # Tags are never reused (one per commit), so a cached copy is always the right one.
+    pullPolicy: IfNotPresent
     tag: sha-2900286
+
 gateway:
   hostname: shop.local
 rbac:
