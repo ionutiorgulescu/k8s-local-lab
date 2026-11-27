@@ -23,7 +23,8 @@ gitops/
 
 ## Not managed by Argo CD
 
-Created by bootstrap, because Argo CD can't create them for itself or they don't belong in Git:
+Created by `cluster/bootstrap.sh`, because Argo CD can't create them for itself or they
+don't belong in Git:
 
 - the kind cluster and Cilium (no pod networking without it)
 - Argo CD itself, and `root.yaml`

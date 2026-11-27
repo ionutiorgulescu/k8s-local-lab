@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
-# Rebuilds the whole Phase 2 lab from the repo: kind cluster, Cilium + Hubble,
-# metrics-server, Envoy Gateway, the shop-api image, and the shop Helm chart.
+# Rebuilds the whole lab, GitOps style. The script only does what Argo CD can't do for
+# itself; everything else (metrics-server, Envoy Gateway, the GatewayClass, the shop app)
+# comes from this repository's main branch on GitHub, deployed by Argo CD.
 #
 #   ./cluster/bootstrap.sh
 #
-# Safe to re-run: every step either skips work that's already done or is an
-# idempotent "apply" / "helm upgrade --install".
+# Steps: kind cluster -> Cilium -> shop-api image -> Argo CD -> namespace + DB password
+#        -> root Application -> wait until every Application is Synced and Healthy
+#        -> smoke test through the gateway.
 #
+# Safe to re-run: every step skips work that's already done or is idempotent.
 # Written for the bash 3.2 that ships with macOS (no bash 4 features).
 
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Pinned versions (keep in sync with cluster/README.md)
+# Pinned versions (keep in sync with cluster/README.md). The versions of everything
+# Argo CD deploys are pinned in gitops/apps/*.yaml instead.
 # ---------------------------------------------------------------------------
 CLUSTER_NAME=lab                       # must match "name:" in cluster/kind.yaml
 CILIUM_VERSION=1.20.5
-METRICS_SERVER_CHART_VERSION=3.14.0
-ENVOY_GATEWAY_VERSION=v1.10.0
+ARGOCD_CHART_VERSION=10.19.0           # Argo CD v3.6.2
 NAMESPACE=shop
+APPS_TIMEOUT_SECONDS=900               # how long to wait for all Applications
 
 # Run from the repo root, wherever the script is called from.
 cd "$(dirname "$0")/.."
@@ -48,7 +52,7 @@ retry() {
 }
 
 # Use a private, empty Helm configuration for this script. Your global Helm repos
-# (and their cache) can't break or change the result: in Step 1, a stale cache for
+# (and their cache) can't break or change the result: in Phase 2, a stale cache for
 # an unrelated repo made `cilium install` fail.
 HELM_TMP=$(mktemp -d)
 export HELM_CONFIG_HOME="$HELM_TMP/config"
@@ -65,7 +69,7 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 step "Checking prerequisites"
 # ---------------------------------------------------------------------------
-for tool in docker kind kubectl helm cilium openssl curl; do
+for tool in docker kind kubectl helm cilium openssl curl git; do
   command -v "$tool" >/dev/null 2>&1 || die "'$tool' is not installed"
 done
 docker info >/dev/null 2>&1 || die "Docker isn't running"
@@ -73,6 +77,16 @@ docker info >/dev/null 2>&1 || die "Docker isn't running"
 mem_bytes=$(docker info --format '{{.MemTotal}}')
 if [ "$mem_bytes" -lt 6000000000 ]; then
   info "Warning: Docker has $((mem_bytes / 1024 / 1024)) MiB of memory; 8 GiB is recommended."
+fi
+
+# Argo CD deploys what's on GitHub's main, not this working copy. Warn if they differ
+# (compared with the last fetch of origin/main; run `git fetch` for a fresh comparison).
+if ! git diff --quiet HEAD -- gitops charts 2>/dev/null; then
+  info "Warning: uncommitted changes in gitops/ or charts/. Argo CD won't see them."
+fi
+ahead=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
+if [ "$ahead" != "0" ]; then
+  info "Warning: $ahead local commit(s) not on origin/main. Argo CD deploys GitHub's main: push first."
 fi
 info "All tools found. App image: $IMAGE"
 
@@ -89,7 +103,8 @@ kubectl config use-context "kind-$CLUSTER_NAME" >/dev/null
 # ---------------------------------------------------------------------------
 step "Cilium $CILIUM_VERSION with Hubble Relay"
 # ---------------------------------------------------------------------------
-# Nodes stay NotReady until a CNI is installed (the kind config disables the default one).
+# Not managed by Argo CD: without a CNI no pod gets an IP, Argo CD's included. Nodes
+# stay NotReady until it's installed (the kind config disables the default CNI).
 if helm status cilium -n kube-system >/dev/null 2>&1; then
   info "Already installed, skipping."
 else
@@ -99,34 +114,29 @@ cilium status --wait --wait-duration 5m >/dev/null
 kubectl wait --for=condition=Ready nodes --all --timeout=5m
 
 # ---------------------------------------------------------------------------
-step "metrics-server (chart $METRICS_SERVER_CHART_VERSION)"
-# ---------------------------------------------------------------------------
-# --repo points at the chart repository directly, so no `helm repo add` is needed.
-helm upgrade --install metrics-server metrics-server \
-  --repo https://kubernetes-sigs.github.io/metrics-server/ \
-  --version "$METRICS_SERVER_CHART_VERSION" \
-  -n kube-system \
-  --set 'args={--kubelet-insecure-tls}' \
-  --wait --timeout 5m
-
-# ---------------------------------------------------------------------------
-step "Envoy Gateway $ENVOY_GATEWAY_VERSION and GatewayClass"
-# ---------------------------------------------------------------------------
-helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version "$ENVOY_GATEWAY_VERSION" \
-  -n envoy-gateway-system --create-namespace \
-  --wait --timeout 5m
-kubectl apply -f gitops/platform/gatewayclass.yaml
-
-# ---------------------------------------------------------------------------
 step "Build $IMAGE and load it into the kind nodes"
 # ---------------------------------------------------------------------------
+# Argo CD can only deploy images that exist. There's no registry or CI yet, so the
+# image is built here and copied into every node.
 docker build -t "$IMAGE" app/
 kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
 
 # ---------------------------------------------------------------------------
+step "Argo CD (chart $ARGOCD_CHART_VERSION)"
+# ---------------------------------------------------------------------------
+helm upgrade --install argocd argo-cd \
+  --repo https://argoproj.github.io/argo-helm \
+  --version "$ARGOCD_CHART_VERSION" \
+  -n argocd --create-namespace \
+  -f gitops/argocd/values.yaml \
+  --wait --timeout 5m
+
+# ---------------------------------------------------------------------------
 step "Namespace '$NAMESPACE' and database password"
 # ---------------------------------------------------------------------------
+# The namespace is managed by the platform Application (wave 1), but the password Secret
+# isn't in Git and must exist before the app starts, so create the namespace now. Argo CD
+# adopts it later.
 kubectl apply -f gitops/platform/namespace-shop.yaml
 
 # Create the password only if it doesn't exist. Never replace it on a re-run:
@@ -140,13 +150,38 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-step "shop chart"
+step "Root Application: hand over to Git"
 # ---------------------------------------------------------------------------
-helm lint charts/shop -f charts/shop/values-local.yaml >/dev/null
-helm upgrade --install shop charts/shop \
-  -n "$NAMESPACE" \
-  -f charts/shop/values-local.yaml \
-  --wait --timeout 5m
+# The last thing applied by hand. From here, Argo CD creates every Application in
+# gitops/apps/ (sync waves: projects -1, add-ons 0, platform 1, shop 2).
+kubectl apply -f gitops/root.yaml
+
+# ---------------------------------------------------------------------------
+step "Waiting for every Application to be Synced and Healthy"
+# ---------------------------------------------------------------------------
+# Expected: one per Application manifest in gitops/apps/, plus root.
+expected=$(( $(grep -l '^kind: Application$' gitops/apps/*.yaml | wc -l) + 1 ))
+deadline=$(( SECONDS + APPS_TIMEOUT_SECONDS ))
+while :; do
+  states=$(kubectl -n argocd get applications \
+    -o jsonpath='{range .items[*]}{.status.sync.status}/{.status.health.status}{"\n"}{end}' \
+    2>/dev/null || true)
+  total=$(printf '%s' "$states" | grep -c . || true)
+  ready=$(printf '%s\n' "$states" | grep -c '^Synced/Healthy$' || true)
+  printf '\r    %s of %s Applications Synced and Healthy (waiting for %s)   ' \
+    "$ready" "$total" "$expected"
+  if [ "$total" -ge "$expected" ] && [ "$ready" -eq "$total" ]; then
+    echo
+    break
+  fi
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo
+    kubectl -n argocd get applications
+    die "Applications not all Synced and Healthy after ${APPS_TIMEOUT_SECONDS}s (see above; 'argocd app get <name>' shows why)"
+  fi
+  sleep 5
+done
+kubectl -n argocd get applications
 
 # ---------------------------------------------------------------------------
 step "Smoke test through the gateway"
@@ -183,7 +218,14 @@ cat <<EOF
     Nodes:      $(kubectl get nodes --no-headers | wc -l | tr -d ' ') Ready
     App:        $(kubectl -n "$NAMESPACE" get deploy api -o jsonpath='{.status.readyReplicas}') API replicas ready
 
-    To call the API yourself:
+    Argo CD UI:
+      kubectl -n argocd port-forward svc/argocd-server 8080:80   # http://localhost:8080
+      argocd admin initial-password -n argocd                    # first login as admin
+    Argo CD CLI:
+      export ARGOCD_OPTS='--port-forward --port-forward-namespace argocd --plaintext'
+      argocd login --username admin
+
+    Call the API:
       kubectl -n envoy-gateway-system port-forward svc/$ENVOY_SVC 8888:80
       curl -H "Host: shop.local" localhost:8888/api/products
 EOF

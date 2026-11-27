@@ -6,14 +6,23 @@
 ./cluster/bootstrap.sh
 ```
 
-Creates the kind cluster, installs Cilium (with Hubble Relay), metrics-server and Envoy
-Gateway, builds and loads the `shop-api` image, creates the namespace and the database
-password, installs the `shop` chart, and checks `/api/products` through the gateway.
-Safe to re-run. The sections below explain each step by hand.
+Does only what Argo CD can't do for itself: creates the kind cluster, installs Cilium (with
+Hubble Relay), builds and loads the `shop-api` image, installs Argo CD, creates the `shop`
+namespace and the database password, and applies `gitops/root.yaml`. Argo CD then deploys
+everything else from GitHub's `main` (see `gitops/README.md`). The script waits until every
+Application is Synced and Healthy, then checks `/api/products` through the gateway.
+
+Argo CD deploys what's **pushed**, not your working copy; the script warns about unpushed
+commits. Safe to re-run.
+
+The sections below are the manual steps from Phases 2 and 3, kept as reference. Since
+Phase 3, metrics-server, Envoy Gateway, the GatewayClass and the app are installed by Argo CD,
+not by hand.
 
 ## Pinned versions
 
-When you change a version here, change it in `bootstrap.sh` too.
+Versions of Argo CD-managed components are pinned in `gitops/apps/*.yaml`; the bootstrap
+pieces (Cilium, Argo CD) in `bootstrap.sh`. Keep this table in sync with both.
 
 | Component        | Version  | Notes                                             |
 |------------------|----------|---------------------------------------------------|
