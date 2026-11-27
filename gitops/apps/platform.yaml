@@ -16,6 +16,11 @@ spec:
     path: gitops/platform
   destination:
     server: https://kubernetes.default.svc
+    # Required by the platform project, which only allows listed namespaces (an empty
+    # namespace matches none: InvalidSpecError). The only namespaced object here, the
+    # EnvoyProxy, lives in envoy-gateway-system; cluster-scoped objects (the Namespace,
+    # the GatewayClass) ignore this field.
+    namespace: envoy-gateway-system
   syncPolicy:
     automated:
       prune: true
