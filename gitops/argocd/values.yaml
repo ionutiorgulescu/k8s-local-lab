@@ -25,6 +25,10 @@ configs:
       enableOCI: "true"
 
   cm:
+    # A second local account, "dev", that can log in to the UI and CLI (no API tokens).
+    # Its password is set by an admin: argocd account update-password --account dev
+    accounts.dev: login
+
     # Report a child Application's health to its parent. Argo CD stopped doing this by
     # default (v1.8), which makes sync waves between Applications pointless: the root app
     # wouldn't wait for wave 0 (e.g. Envoy Gateway) to be Healthy before starting wave 1.
@@ -42,6 +46,19 @@ configs:
         end
       end
       return hs
+
+  # Argo CD's own RBAC (separate from Kubernetes RBAC: it controls what people may do
+  # through Argo CD). Format: p, <subject>, <resource>, <action>, <project>/<object>, allow|deny
+  rbac:
+    # Accounts get nothing unless a policy grants it. (admin keeps the built-in role:admin.)
+    policy.default: ""
+    policy.csv: |
+      # Read-only access to the shop project, mirroring the Phase 2 Kubernetes "developer"
+      # Role: see apps, their resources and pod logs; no sync, no rollback, no exec, no edits.
+      p, role:shop-readonly, applications, get, shop/*, allow
+      p, role:shop-readonly, logs, get, shop/*, allow
+      p, role:shop-readonly, projects, get, shop, allow
+      g, dev, role:shop-readonly
 
   params:
     # Serve the UI and API over plain HTTP inside the cluster. You reach it through

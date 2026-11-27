@@ -12,9 +12,9 @@ metadata:
     # Wave 2: needs the namespace and the GatewayClass from platform (wave 1).
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  # Projects group Applications and limit what they may deploy where (Step 6).
-  # "default" allows everything.
-  project: default
+  # The shop project (projects.yaml): only this repo, only the shop namespace, no
+  # cluster-scoped objects.
+  project: shop
 
   source:
     # Argo CD reads GitHub, not your laptop: changes count only once pushed.

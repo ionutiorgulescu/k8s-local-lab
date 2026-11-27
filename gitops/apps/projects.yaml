@@ -1,0 +1,52 @@
+# AppProjects: limits on what the Applications in each project may deploy, and where.
+# Argo CD checks every Application against its project before syncing; anything outside
+# the limits is refused.
+#
+# Wave -1: projects must exist before the Applications that reference them (wave 0+).
+
+# platform: cluster-wide building blocks, owned by whoever runs the cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Cluster add-ons and shared setup (metrics-server, Envoy Gateway, namespaces, GatewayClass)
+  # Only these sources.
+  sourceRepos:
+    - https://github.com/ionutiorgulescu/k8s-local-lab.git
+    - https://kubernetes-sigs.github.io/metrics-server/
+    - docker.io/envoyproxy
+  # Namespaced objects only in these namespaces (cluster-scoped objects have no namespace
+  # and are governed by clusterResourceWhitelist below).
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
+    - server: https://kubernetes.default.svc
+      namespace: envoy-gateway-system
+  # Add-ons install CRDs, ClusterRoles, webhooks, APIServices, namespaces... so the
+  # platform project may create any cluster-scoped kind.
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+# shop: the application team's project.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: shop
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: The shop app. Its own repo, its own namespace, nothing cluster-wide.
+  sourceRepos:
+    - https://github.com/ionutiorgulescu/k8s-local-lab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: shop
+  # Empty list: no cluster-scoped objects at all (no Namespaces, ClusterRoles, CRDs,
+  # GatewayClasses...). A chart change that tried to add one would be refused.
+  clusterResourceWhitelist: []

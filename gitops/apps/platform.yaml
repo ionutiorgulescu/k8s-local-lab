@@ -9,7 +9,7 @@ metadata:
     # Wave 1: the GatewayClass needs the EnvoyProxy CRD from envoy-gateway (wave 0).
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: default
+  project: platform
   source:
     repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
     targetRevision: main

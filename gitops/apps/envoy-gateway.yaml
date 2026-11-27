@@ -8,7 +8,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: default
+  project: platform
   source:
     # OCI registry; registered in gitops/argocd/values.yaml (configs.repositories).
     repoURL: docker.io/envoyproxy

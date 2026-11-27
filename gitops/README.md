@@ -8,6 +8,7 @@ gitops/
 ├── root.yaml          root Application ("App of Apps"); the only one applied by hand
 ├── argocd/values.yaml Argo CD's own Helm values (installed with Helm by bootstrap)
 ├── apps/              one Application per component; root deploys all of them
+│   ├── projects.yaml         wave -1 AppProjects "platform" and "shop" (what may go where)
 │   ├── metrics-server.yaml   wave 0  Helm chart from upstream, pinned
 │   ├── envoy-gateway.yaml    wave 0  Helm chart (OCI), pinned; server-side apply
 │   ├── platform.yaml         wave 1  manifests in platform/

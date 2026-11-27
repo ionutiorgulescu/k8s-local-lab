@@ -8,7 +8,7 @@ metadata:
     # Wave 0: no dependencies on the other apps.
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: default
+  project: platform
   source:
     repoURL: https://kubernetes-sigs.github.io/metrics-server/
     chart: metrics-server
