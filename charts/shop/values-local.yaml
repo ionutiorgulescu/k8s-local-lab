@@ -25,4 +25,4 @@ frontend:
   enabled: true
   image:
     repository: ghcr.io/ionutiorgulescu/shop-frontend
-    tag: sha-7d1e265
+    tag: sha-0639e79
