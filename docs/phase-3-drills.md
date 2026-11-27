@@ -84,3 +84,45 @@ Recovered with `git revert`.
 - The chart's `fail` guard (Phase 2, Step 12) mattered: without it the chart would have rendered
   *without* Postgres, and with `prune: true` Argo CD would have deleted the database StatefulSet.
   Validate dangerous value combinations in the chart, so mistakes fail before they're applied.
+
+---
+
+## 3. Manual hotfix during an "incident"
+
+**Done:** (A) "turned on debug logging" directly: `kubectl -n shop set env deploy/api LOG_LEVEL=debug`.
+(B) tried to switch off self-heal: `argocd app set shop --self-heal=false`.
+
+**Observed:**
+
+- (A) The hotfix **stayed**. The Deployment kept `LOG_LEVEL=debug`, and `shop` stayed
+  **Synced** / Healthy with an empty `argocd app diff`. Expected beforehand: that self-heal would
+  revert it. Wrong. A variable set with `env` overrides the same name from `envFrom` (the
+  ConfigMap), so the API really ran with `debug` while Git said `info`.
+  Cleaned up with `kubectl -n shop set env deploy/api LOG_LEVEL-`.
+- (B) `argocd app set` printed nothing (success), but `selfHeal` was back to `true` within
+  seconds. Events on `root`: `Synced -> OutOfSync`, `Initiated automated sync`,
+  `Partial sync operation ... succeeded`, `OutOfSync -> Synced`: root re-applied only the
+  drifted object, the `shop` Application.
+
+**What it shows:**
+
+- **Self-heal catches changes to fields that are in Git, not additions next to them.** By
+  default Argo CD compares like `kubectl apply`: fields Git sets, and fields it applied before.
+  The ConfigMap edit in Step 3 changed a field in Git and was reverted; a new `env` entry isn't
+  in Git, so it wasn't seen as drift. Argo CD said Synced while the cluster differed from Git.
+- **Two levels of self-heal.** `root` keeps the Application specs equal to `gitops/apps/`, and
+  each Application keeps its objects equal to its source. Settings like `selfHeal` can only be
+  changed in Git.
+- Self-heal limits drift, it doesn't prevent it. Prevention is access control: people don't get
+  write access to production namespaces (Phase 2's read-only role, Step 6's Argo CD RBAC).
+
+**Emergencies under GitOps:**
+
+1. **Default: fix forward in Git.** A small commit or a `git revert`, pushed, then
+   `argocd app get <app> --refresh`. Usually as fast as a manual fix, and it's recorded.
+2. **If the cluster must change before Git can:** a deliberate break-glass step, done in Git:
+   commit the Application with automated sync turned off (or a deny sync window in the
+   AppProject), make the manual change, then put the real fix in Git and re-enable sync.
+   Never leave a manual change unrecorded.
+3. **Afterwards:** check for leftovers Argo CD can't see (like the `env` entry above), and
+   record what happened.
