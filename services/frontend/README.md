@@ -21,7 +21,7 @@ Needs the kind cluster running (gateway on `localhost:8088`).
 ## Build and deploy
 
 CI (`.github/workflows/shop-frontend.yml`) builds the image on every push to `main` that
-changes `frontend/`, publishes `ghcr.io/<owner>/shop-frontend:sha-<commit>`, and writes that
+changes `services/frontend/`, publishes `ghcr.io/<owner>/shop-frontend:sha-<commit>`, and writes that
 tag into `charts/shop/values-local.yaml`. The chart deploys it when `frontend.enabled` is
 true. The page footer shows the commit it was built from, and the API's version.
 

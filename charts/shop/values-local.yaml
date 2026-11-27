@@ -6,7 +6,7 @@
 api:
   image:
     # repository and tag are written by CI (.github/workflows/shop-api.yml) on every push
-    # that changes app/: the image built from that commit, published to GHCR.
+    # that changes services/api/: the image built from that commit, published to GHCR.
     repository: ghcr.io/ionutiorgulescu/shop-api
     # Tags are never reused (one per commit), so a cached copy is always the right one.
     pullPolicy: IfNotPresent
@@ -21,7 +21,7 @@ rbac:
         name: dev
 frontend:
   # Switched on once CI had published a first image (sha-47432b0). repository and tag are
-  # written by CI (.github/workflows/shop-frontend.yml) on every push that changes frontend/.
+  # written by CI (.github/workflows/shop-frontend.yml) on every push that changes services/frontend/.
   enabled: true
   image:
     repository: ghcr.io/ionutiorgulescu/shop-frontend

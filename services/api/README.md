@@ -38,6 +38,6 @@ means it was killed with SIGKILL because the grace period ran out.
 
 ```bash
 cd app && npm install          # once: creates package-lock.json
-docker build -t shop-api:0.1.0 app/
+docker build -t shop-api:dev services/api/
 docker run --rm -p 8080:8080 shop-api:0.1.0
 ```

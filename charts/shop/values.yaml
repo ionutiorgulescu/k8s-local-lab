@@ -71,7 +71,7 @@ postgres:
     limits:
       memory: 512Mi
 
-# The React frontend (frontend/), static files served by nginx. Off by default: switch it on
+# The React frontend (services/frontend/), static files served by nginx. Off by default: switch it on
 # only once CI has published an image (.github/workflows/shop-frontend.yml writes
 # frontend.image.repository and .tag). Rendering fails if it's enabled without a tag.
 frontend:

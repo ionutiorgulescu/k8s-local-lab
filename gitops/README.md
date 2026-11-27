@@ -37,7 +37,7 @@ kubectl -n shop create secret generic postgres-credentials \
 
 ## The shop-api image
 
-Built by CI, not by bootstrap: on every push to `main` that changes `app/`,
+Built by CI, not by bootstrap: on every push to `main` that changes `services/api/` or `services/frontend/`,
 `.github/workflows/shop-api.yml` builds the image (amd64 + arm64), publishes
 `ghcr.io/ionutiorgulescu/shop-api:sha-<commit>`, and commits that tag into
 `charts/shop/values-local.yaml`. Argo CD deploys it like any other change.

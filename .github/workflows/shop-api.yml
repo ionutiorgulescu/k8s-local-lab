@@ -1,6 +1,6 @@
 # CI for shop-api: build the image, publish it to GHCR, and deploy it through Git.
 #
-#   push to main touching app/  ->  build linux/amd64 + linux/arm64
+#   push to main touching services/api/  ->  build linux/amd64 + linux/arm64
 #                               ->  push ghcr.io/<owner>/shop-api:sha-<commit>
 #                               ->  commit the new image into charts/shop/values-local.yaml
 #                               ->  Argo CD syncs that commit (rolling update)
@@ -12,7 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/**"
+      - "services/api/**"
       - ".github/workflows/shop-api.yml"
   # Allows a manual run from the Actions tab.
   workflow_dispatch: {}
@@ -70,7 +70,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: app
+          context: services/api
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
