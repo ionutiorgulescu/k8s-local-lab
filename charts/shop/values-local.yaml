@@ -8,6 +8,11 @@ api:
     repository: shop-api
     pullPolicy: IfNotPresent   # the image exists only inside the kind nodes
 
+# Phase 3 drill 2: turn off in-cluster Postgres WITHOUT setting database.host. The chart
+# refuses to render (the "required when postgres.enabled is false" check). To be reverted.
+postgres:
+  enabled: false
+
 gateway:
   hostname: shop.local
 
