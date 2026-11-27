@@ -1,7 +1,42 @@
 # 0001: Cilium replaces kube-proxy
 
-- **Status:** accepted
+- **Status:** accepted, but its motivation was wrong (see the correction below); the choice
+  stands for now, to be revisited in the EKS phase
 - **Date:** 2026-11-27
+
+## Correction (2026-11-27, same day)
+
+The diagnosis in "Context" below was wrong. After switching to kube-proxy replacement, the
+Mac still got no response. Cilium's service list on the control-plane showed why:
+
+```
+ID   Frontend               Service Type   Backend
+19   0.0.0.0:30080/TCP      NodePort                                  <- external traffic: no backends
+21   0.0.0.0:30080/TCP/i    NodePort       1 => 10.244.1.78:10080     <- internal traffic: Envoy
+```
+
+Envoy Gateway creates the Envoy Service with **`externalTrafficPolicy: Local`**: traffic from
+outside the cluster may only use an Envoy pod on the node it arrived at. The kind port mapping
+lands on the control-plane, which never runs Envoy, so requests from the Mac were dropped,
+with kube-proxy and with Cilium alike. The earlier test results fit this too: requests sent
+straight to the node running Envoy worked, and kube-proxy treats `localhost` NodePort traffic
+specially. The "kube-proxy to VXLAN hand-off" explanation was a guess that wasn't checked
+against the Service's traffic policy.
+
+Fix: `externalTrafficPolicy: Cluster` in the EnvoyProxy (`gitops/platform/gatewayclass.yaml`).
+
+What that means for this decision: kube-proxy replacement didn't fix the problem and wasn't
+needed for it. It's kept because it works, it's Cilium's documented setup for kind, and it
+matches EKS clusters that run Cilium; but it's now a preference, not a requirement. Default
+EKS keeps kube-proxy, so reconsider this when the EKS phase chooses its networking.
+
+Lesson: when traffic to a Service is dropped on some nodes and not others, check the
+Service's `externalTrafficPolicy` (and the backends per node, e.g. `cilium-dbg service list`)
+before suspecting the datapath.
+
+---
+
+*Original record below, unchanged.*
 
 ## Context
 

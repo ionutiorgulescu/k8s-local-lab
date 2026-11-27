@@ -10,9 +10,8 @@
 # because kind's default CNI (kindnet) does not enforce NetworkPolicies.
 #
 # kube-proxy: not installed. Cilium handles Services and NodePorts itself with eBPF
-# ("kube-proxy replacement"). With kube-proxy, NodePort traffic that had to be forwarded to
-# a pod on another node was lost in the hand-off from kube-proxy to Cilium's VXLAN tunnel.
-# See docs/decisions/0001-cilium-kube-proxy-replacement.md.
+# ("kube-proxy replacement"), Cilium's documented setup for kind.
+# See docs/decisions/0001-cilium-kube-proxy-replacement.md (including its correction).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: lab
