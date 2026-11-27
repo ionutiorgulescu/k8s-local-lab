@@ -87,14 +87,28 @@ fi
 kubectl config use-context "kind-$CLUSTER_NAME" >/dev/null
 
 # ---------------------------------------------------------------------------
-step "Cilium $CILIUM_VERSION with Hubble Relay"
+step "Cilium $CILIUM_VERSION with Hubble Relay, replacing kube-proxy"
 # ---------------------------------------------------------------------------
 # Not managed by Argo CD: without a CNI no pod gets an IP, Argo CD's included. Nodes
 # stay NotReady until it's installed (the kind config disables the default CNI).
+#
+# kubeProxyReplacement: Cilium handles Services and NodePorts with eBPF; the kind config
+# doesn't install kube-proxy (docs/decisions/0001-cilium-kube-proxy-replacement.md).
+# k8sServiceHost/Port: the API server's real address. Pods normally reach it through the
+# "kubernetes" Service IP, but without kube-proxy it's Cilium that translates Service IPs,
+# so Cilium itself can't use one to start. On kind the control-plane container's name
+# resolves on the Docker network.
+if kubectl -n kube-system get daemonset kube-proxy >/dev/null 2>&1; then
+  die "kube-proxy is running: this cluster was created with an older cluster/kind.yaml. Recreate it: kind delete cluster --name $CLUSTER_NAME"
+fi
 if helm status cilium -n kube-system >/dev/null 2>&1; then
   info "Already installed, skipping."
 else
-  cilium install --version "$CILIUM_VERSION" --set hubble.relay.enabled=true
+  cilium install --version "$CILIUM_VERSION" \
+    --set hubble.relay.enabled=true \
+    --set kubeProxyReplacement=true \
+    --set k8sServiceHost="${CLUSTER_NAME}-control-plane" \
+    --set k8sServicePort=6443
 fi
 cilium status --wait --wait-duration 5m >/dev/null
 kubectl wait --for=condition=Ready nodes --all --timeout=5m

@@ -28,7 +28,7 @@ pieces (Cilium, Argo CD) in `bootstrap.sh`. Keep this table in sync with both.
 |------------------|----------|---------------------------------------------------|
 | kind             | v0.33.0  | node images below are built for this release      |
 | Kubernetes       | v1.36.4  | EKS standard support until 2027-08-02             |
-| Cilium           | 1.20.5   | installed with the cilium CLI                     |
+| Cilium           | 1.20.5   | cilium CLI; replaces kube-proxy (no kube-proxy in the cluster) |
 | cilium CLI       | v0.20.3  |                                                   |
 | hubble CLI       | v1.20.4  | `brew install hubble`                             |
 | metrics-server   | chart 3.14.0 (app v0.9.0) | 0.9.x supports Kubernetes 1.34+   |
@@ -41,9 +41,20 @@ pieces (Cilium, Argo CD) in `bootstrap.sh`. Keep this table in sync with both.
 ```bash
 kind create cluster --config cluster/kind.yaml
 kubectl get nodes                      # NotReady is expected: no CNI yet
-cilium install --version 1.20.5
+cilium install --version 1.20.5 --set hubble.relay.enabled=true \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=lab-control-plane --set k8sServicePort=6443
 cilium status --wait
 kubectl get nodes                      # all three Ready
+```
+
+Since Phase 3 the cluster has **no kube-proxy** (`kubeProxyMode: none` in `kind.yaml`): Cilium
+handles Services and NodePorts with eBPF. See `docs/decisions/0001-cilium-kube-proxy-replacement.md`.
+Check it with:
+
+```bash
+kubectl -n kube-system get daemonset kube-proxy       # NotFound
+kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement
 ```
 
 ## Hubble (Phase 2, Step 11)
