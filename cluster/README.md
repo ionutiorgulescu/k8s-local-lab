@@ -56,7 +56,7 @@ For a fresh cluster, enable it at install time instead:
 ```bash
 helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
 helm install metrics-server metrics-server/metrics-server -n kube-system \
-  --version 3.14.0 -f cluster/metrics-server-values.yaml
+  --version 3.14.0 --set 'args={--kubelet-insecure-tls}'
 kubectl -n kube-system rollout status deploy/metrics-server
 kubectl top nodes                      # numbers after about a minute
 ```
@@ -70,12 +70,12 @@ so there is no `helm repo add`.
 helm install eg oci://docker.io/envoyproxy/gateway-helm --version v1.10.0 \
   -n envoy-gateway-system --create-namespace
 kubectl -n envoy-gateway-system wait --for=condition=Available deploy/envoy-gateway --timeout=5m
-kubectl apply -f cluster/gatewayclass.yaml   # cluster-wide; the app's Gateway comes from the chart
+kubectl apply -f gitops/platform/gatewayclass.yaml   # cluster-wide; the app's Gateway comes from the chart
 ```
 
 kind has no cloud load balancer. With the default LoadBalancer Service, EXTERNAL-IP stays
 `<pending>`, the Gateway stays `PROGRAMMED: False`, and Argo CD reports it as Progressing
-forever. `cluster/gatewayclass.yaml` therefore links the GatewayClass to an `EnvoyProxy` that
+forever. `gitops/platform/gatewayclass.yaml` therefore links the GatewayClass to an `EnvoyProxy` that
 uses a ClusterIP Service: the Gateway gets the in-cluster IP as its address and becomes
 Programmed. Reach it through port-forward:
 

@@ -1,0 +1,27 @@
+# The root Application ("App of Apps"). It deploys every Application manifest in
+# gitops/apps/, so adding, changing or removing an app is a commit to that folder.
+#
+# This is the only object applied by hand (by bootstrap.sh in Step 8):
+#   kubectl apply -f gitops/root.yaml
+#
+# It lives outside gitops/apps/ on purpose, so it doesn't manage itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
+    targetRevision: main
+    path: gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd          # Application objects live in the argocd namespace
+  syncPolicy:
+    automated:
+      # Deleting a file in gitops/apps/ deletes that Application object. The Applications
+      # have no resources-finalizer, so their workloads stay running (see Step 7).
+      prune: true
+      selfHeal: true

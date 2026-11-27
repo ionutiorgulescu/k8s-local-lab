@@ -18,6 +18,12 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: shop
+  annotations:
+    # Never let Argo CD remove this namespace: deleting it deletes everything inside,
+    # including the Postgres volume and the password Secret, neither of which is in Git.
+    #   Delete=false - keep it if the platform Application is deleted
+    #   Prune=false  - keep it if this file is removed from Git
+    argocd.argoproj.io/sync-options: Delete=false,Prune=false
   labels:
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.36

@@ -1,6 +1,6 @@
-# Cluster-wide gateway setup for the kind lab. Applied after installing Envoy Gateway
-# (which provides the EnvoyProxy kind). Not part of the app chart: one GatewayClass
-# serves every app's Gateways.
+# Cluster-wide gateway setup for the kind lab. Deployed by the platform Application
+# (sync wave 1), after envoy-gateway (wave 0) has installed the EnvoyProxy kind. Not part
+# of the app chart: one GatewayClass serves every app's Gateways.
 
 # EnvoyProxy: how Envoy Gateway deploys the Envoy proxy for Gateways of this class.
 # Here: expose it with a ClusterIP Service instead of the default LoadBalancer.

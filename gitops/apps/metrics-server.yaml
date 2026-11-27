@@ -1,0 +1,28 @@
+# metrics-server: CPU/memory readings for kubectl top and the HPA.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    # Wave 0: no dependencies on the other apps.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    targetRevision: 3.14.0          # app v0.9.0, supports Kubernetes 1.34+
+    helm:
+      releaseName: metrics-server   # same as the Phase 2 Helm release, so objects are adopted
+      valuesObject:
+        args:
+          # kind only: kubelets serve self-signed certificates. Drop this on EKS.
+          - --kubelet-insecure-tls
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

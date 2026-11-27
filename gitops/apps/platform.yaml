@@ -1,0 +1,22 @@
+# Plain manifests the app relies on: the shop namespace (with Pod Security labels) and
+# the cluster-wide GatewayClass + EnvoyProxy.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    # Wave 1: the GatewayClass needs the EnvoyProxy CRD from envoy-gateway (wave 0).
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ionutiorgulescu/k8s-local-lab.git
+    targetRevision: main
+    path: gitops/platform
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

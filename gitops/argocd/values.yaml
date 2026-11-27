@@ -14,6 +14,35 @@ notifications:
   enabled: false
 
 configs:
+  # Chart repositories Argo CD must be told about. Envoy Gateway's chart is stored in an
+  # OCI registry (like a container image), and Argo CD only uses OCI for Helm when the
+  # repository is registered with enableOCI. Public, so no credentials.
+  repositories:
+    envoyproxy-oci:
+      name: envoyproxy
+      type: helm
+      url: docker.io/envoyproxy
+      enableOCI: "true"
+
+  cm:
+    # Report a child Application's health to its parent. Argo CD stopped doing this by
+    # default (v1.8), which makes sync waves between Applications pointless: the root app
+    # wouldn't wait for wave 0 (e.g. Envoy Gateway) to be Healthy before starting wave 1.
+    # Snippet from the Argo CD docs.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
+          end
+        end
+      end
+      return hs
+
   params:
     # Serve the UI and API over plain HTTP inside the cluster. You reach it through
     # kubectl port-forward (an encrypted tunnel to the pod), so TLS here would only add

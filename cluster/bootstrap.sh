@@ -106,7 +106,7 @@ helm upgrade --install metrics-server metrics-server \
   --repo https://kubernetes-sigs.github.io/metrics-server/ \
   --version "$METRICS_SERVER_CHART_VERSION" \
   -n kube-system \
-  -f cluster/metrics-server-values.yaml \
+  --set 'args={--kubelet-insecure-tls}' \
   --wait --timeout 5m
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --version "$ENVOY_GATEWAY_VERSION" \
   -n envoy-gateway-system --create-namespace \
   --wait --timeout 5m
-kubectl apply -f cluster/gatewayclass.yaml
+kubectl apply -f gitops/platform/gatewayclass.yaml
 
 # ---------------------------------------------------------------------------
 step "Build $IMAGE and load it into the kind nodes"
@@ -127,7 +127,7 @@ kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
 # ---------------------------------------------------------------------------
 step "Namespace '$NAMESPACE' and database password"
 # ---------------------------------------------------------------------------
-kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f gitops/platform/namespace-shop.yaml
 
 # Create the password only if it doesn't exist. Never replace it on a re-run:
 # Postgres sets the password once, when it first initializes its data directory,

@@ -8,6 +8,9 @@ kind: Application
 metadata:
   name: shop
   namespace: argocd
+  annotations:
+    # Wave 2: needs the namespace and the GatewayClass from platform (wave 1).
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   # Projects group Applications and limit what they may deploy where (Step 6).
   # "default" allows everything.
