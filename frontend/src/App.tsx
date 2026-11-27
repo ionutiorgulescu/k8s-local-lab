@@ -65,7 +65,7 @@ export function App() {
       )}
 
       <footer className="muted">
-        frontend {short(frontendRevision)}
+        frontend version {short(frontendRevision)}
         {apiVersion && (
           <>
             {' · '}API {apiVersion.version} ({short(apiVersion.revision)})

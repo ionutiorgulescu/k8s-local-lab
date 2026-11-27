@@ -1,6 +1,6 @@
 # shop-api
 
-Small NestJS API backed by Postgres, built for the Phase 2 Kubernetes lab.
+Small NestJS API backed by Postgres, built for the Phase 2 Kubernetes lab. 
 
 ## Endpoints
 
